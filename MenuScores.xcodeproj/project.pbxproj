@@ -30,7 +30,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		0D9553192DC6700100615774 /* MenuScores.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MenuScores.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D9553192DC6700100615774 /* Matcha.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Matcha.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D95532A2DC6700300615774 /* MenuScoresTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MenuScoresTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0D9553342DC6700300615774 /* MenuScoresUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MenuScoresUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -107,7 +107,7 @@
 		0D95531A2DC6700100615774 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0D9553192DC6700100615774 /* MenuScores.app */,
+				0D9553192DC6700100615774 /* Matcha.app */,
 				0D95532A2DC6700300615774 /* MenuScoresTests.xctest */,
 				0D9553342DC6700300615774 /* MenuScoresUITests.xctest */,
 			);
@@ -139,7 +139,7 @@
 				0D6885432E464D1F00D00CC2 /* KeyboardShortcuts */,
 			);
 			productName = MenuScores;
-			productReference = 0D9553192DC6700100615774 /* MenuScores.app */;
+			productReference = 0D9553192DC6700100615774 /* Matcha.app */;
 			productType = "com.apple.product-type.application";
 		};
 		0D9553292DC6700300615774 /* MenuScoresTests */ = {
@@ -443,7 +443,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MenuScores/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MenuScores;
+				INFOPLIST_KEY_CFBundleDisplayName = Matcha;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -453,8 +453,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 2.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = daniyalmaster.MenuScores;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.suhas.matcha;
+				PRODUCT_NAME = Matcha;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -478,7 +478,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MenuScores/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MenuScores;
+				INFOPLIST_KEY_CFBundleDisplayName = Matcha;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -488,8 +488,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 2.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = daniyalmaster.MenuScores;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.suhas.matcha;
+				PRODUCT_NAME = Matcha;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -509,7 +509,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MenuScores.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MenuScores";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Matcha.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Matcha";
 			};
 			name = Debug;
 		};
@@ -527,7 +527,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MenuScores.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MenuScores";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Matcha.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Matcha";
 			};
 			name = Release;
 		};

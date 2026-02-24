@@ -26,7 +26,12 @@ func displayText(for game: Event, league: String) -> String {
     let clockText = displayClock ?? "-"
     let periodText = period.map { "\(prefix)\($0)" } ?? "-"
 
-    if league == "MLB" || league == "UEFA" || league == "EPL", state == "in" {
+    let soccerLeagues: Set<String> = [
+        "MLS", "NWSL", "UEFA", "EUEFA", "WUEFA", "EPL", "WEPL", "ESP", "GER", "ITA", "MEX",
+        "FRA", "NED", "POR", "FFWC", "FFWWC", "FFWCQUEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC",
+    ]
+
+    if league == "MLB" || soccerLeagues.contains(league), state == "in" {
         let detailText = shortDetail
         return
             "\(awayAbbr) \(awayScore ?? "-") - \(homeAbbr) \(homeScore ?? "-")    \(detailText)"

@@ -19,6 +19,8 @@ struct BehaviorSettingsView: View {
     @AppStorage("notchScreenIndex") private var notchScreenIndex = 0
 
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
+    @AppStorage("compactMode") private var compactMode = false
+    @AppStorage("enableDemoMode") private var enableDemoMode = false
     let refreshOptions = [
         "10 seconds", "15 seconds", "20 seconds", "30 seconds", "40 seconds",
         "50 seconds", "1 minute", "2 minutes", "5 minutes",
@@ -90,6 +92,22 @@ struct BehaviorSettingsView: View {
 
                 Section("Score Updates") {
                     VStack(alignment: .leading, spacing: 2) {
+                        Toggle(isOn: $enableDemoMode) {
+                            HStack {
+                                Image(systemName: "sparkles.rectangle.stack")
+                                    .foregroundColor(.secondary)
+                                Text("Demo Mode (seed mock matches)")
+                            }
+                        }
+
+                        Toggle(isOn: $compactMode) {
+                            HStack {
+                                Image(systemName: "rectangle.compress.vertical")
+                                    .foregroundColor(.secondary)
+                                Text("Compact Mode (denser cards)")
+                            }
+                        }
+
                         HStack {
                             Label("Refresh Interval", systemImage: "timer")
                                 .foregroundColor(.primary)

@@ -30,6 +30,11 @@ struct SoccerMenu: View {
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
     @AppStorage("notiGameStart") private var notiGameStart = false
     @AppStorage("notiGameComplete") private var notiGameComplete = false
+    @AppStorage("iptvM3UURL") private var iptvM3UURL = ""
+    @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
+    @AppStorage("favoriteSoccerCsv") private var favoriteSoccerCsv = ""
+    @State private var standingsTitle = ""
+    @State private var standingsRows: [SoccerStandingRow] = []
 
     private var refreshInterval: TimeInterval {
         switch selectedOption {
@@ -46,14 +51,64 @@ struct SoccerMenu: View {
         }
     }
 
+    private var teamFilters: [String] {
+        (favoriteSoccerCsv + "," + legacyFavoriteTeamsCsv)
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+    }
+
+    private var filteredGames: [Event] {
+        guard !teamFilters.isEmpty else { return viewModel.games }
+
+        return viewModel.games.filter { game in
+            let names = game.competitions
+                .first?
+                .competitors?
+                .compactMap { $0.team?.displayName?.lowercased() } ?? []
+
+            return teamFilters.contains { filter in
+                names.contains { $0.contains(filter) }
+            }
+        }
+    }
+
+    private func broadcastNames(for game: Event) -> [String] {
+        guard let broadcasts = game.competitions.first?.broadcasts else { return [] }
+        return Array(
+            Set(
+                broadcasts
+                    .flatMap { $0.names ?? [] }
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
+        ).sorted()
+    }
+
     var body: some View {
         Menu(title) {
+            if !standingsRows.isEmpty {
+                Menu("Standings: \(standingsTitle)") {
+                    ForEach(standingsRows) { row in
+                        Text("\(row.rank). \(row.teamName)  \(row.points) pts  GP \(row.played)  (\(row.record))")
+                    }
+
+                    if let standingsURL = LeagueLinks.standingsURL(for: league) {
+                        Divider()
+                        Button("Open Full Standings") {
+                            NSWorkspace.shared.open(standingsURL)
+                        }
+                    }
+                }
+                Divider().padding(.bottom, 2)
+            }
+
             Text(formattedDate(from: viewModel.games.first?.date ?? "Invalid Date"))
                 .font(.headline)
             Divider().padding(.bottom)
 
-            if !viewModel.games.isEmpty {
-                ForEach(Array(viewModel.games.enumerated()), id: \.1.id) { _, game in
+            if !filteredGames.isEmpty {
+                ForEach(Array(filteredGames.enumerated()), id: \.1.id) { _, game in
                     Menu {
                         Button {
                             currentTitle = displayText(for: game, league: league)
@@ -130,6 +185,80 @@ struct SoccerMenu: View {
                                 Text("View Game Details")
                             }
                         }
+
+                        if let standingsURL = LeagueLinks.standingsURL(for: league) {
+                            Button {
+                                NSWorkspace.shared.open(standingsURL)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "list.number")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                    Text("View Standings")
+                                }
+                            }
+                        }
+
+                        let channels = broadcastNames(for: game)
+                        if !channels.isEmpty {
+                            Divider()
+                            Text("Broadcast")
+                                .font(.caption)
+                            ForEach(channels, id: \.self) { channel in
+                                Text(channel)
+                                    .font(.caption2)
+                            }
+                        }
+
+                        if !iptvM3UURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           !channels.isEmpty {
+                            Menu {
+                                ForEach(channels, id: \.self) { channel in
+                                    Button(channel) {
+                                        Task {
+                                            if let streamURL = await IPTVResolver.shared.resolveStreamURL(
+                                                channelNames: [channel],
+                                                m3uURLString: iptvM3UURL
+                                            ) {
+                                                NSWorkspace.shared.open(streamURL)
+                                            } else if let playlistURL = URL(string: iptvM3UURL) {
+                                                NSWorkspace.shared.open(playlistURL)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Divider()
+                                Button("Open IPTV Playlist URL") {
+                                    if let playlistURL = URL(string: iptvM3UURL) {
+                                        NSWorkspace.shared.open(playlistURL)
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.circle")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                    Text("Play on IPTV")
+                                }
+                            }
+                        }
+
+                        if let listingURL = LeagueLinks.liveSoccerTVSearchURL(for: game) {
+                            Button {
+                                NSWorkspace.shared.open(listingURL)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "tv")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                    Text("Find Broadcast Listings")
+                                }
+                            }
+                        }
                     } label: {
                         HStack {
                             AsyncImage(
@@ -146,7 +275,7 @@ struct SoccerMenu: View {
                     }
                 }
             } else {
-                Text("Loading games...")
+                Text(teamFilters.isEmpty ? "Loading games..." : "No soccer games match favorites")
                     .foregroundColor(.gray)
                     .padding()
             }
@@ -155,6 +284,7 @@ struct SoccerMenu: View {
             LeagueSelectionModel.shared.currentLeague = league
             Task {
                 await viewModel.populateGames(from: fetchURL)
+                await refreshStandingsIfNeeded(force: true)
             }
         }
         .onReceive(
@@ -162,6 +292,7 @@ struct SoccerMenu: View {
         ) { _ in
             Task {
                 await viewModel.populateGames(from: fetchURL)
+                await refreshStandingsIfNeeded()
                 if let updatedGame = viewModel.games.first(where: { $0.id == currentGameID }) {
                     if pinnedByMenubar {
                         currentTitle = displayText(for: updatedGame, league: league)
@@ -186,6 +317,14 @@ struct SoccerMenu: View {
                     }
                 }
             }
+        }
+    }
+
+    private func refreshStandingsIfNeeded(force: Bool = false) async {
+        if !force, !standingsRows.isEmpty { return }
+        if let result = await SoccerStandingsService.shared.topStandings(for: league, maxRows: 5) {
+            standingsTitle = result.title
+            standingsRows = result.rows
         }
     }
 }

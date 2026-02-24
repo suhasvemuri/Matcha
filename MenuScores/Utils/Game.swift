@@ -57,6 +57,12 @@ struct Competition: Decodable {
     let headlines: [Headlines]?
     let venue: Venue?
     let notes: [Notes]?
+    let broadcasts: [Broadcast]?
+}
+
+struct Broadcast: Decodable {
+    let market: String?
+    let names: [String]?
 }
 
 struct Venue: Decodable {

@@ -143,3 +143,10 @@ Any contributions and feedback is welcome! Feel free to open issues or submit pu
 ## License
 
 This project is licensed under the [GPLv3 License](LICENSE).
+
+## Latest Checkpoint (2026-02-24)
+
+- Renamed app branding to **Matcha** and introduced a dedicated Matcha dashboard flow.
+- Added richer cricket and soccer match cards, detail popovers, standings wiring, and favorites-driven discovery/search.
+- Integrated "Where to Watch" across IPTV (M3U + EPG) and Streamed provider sources.
+- Added local sports branding assets (flags/team logos) and UI polish passes for macOS-native menu interactions.

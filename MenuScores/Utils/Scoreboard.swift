@@ -101,92 +101,92 @@ enum Scoreboard {
 
         static var uefa = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var euefa = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var wuefa = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.wchampions/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.wchampions/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var mls = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/USA.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/USA.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var nwsl = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/USA.NWSL/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/USA.NWSL/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var mex = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/MEX.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/MEX.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var fra = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/FRA.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/FRA.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ned = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/NED.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/NED.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var por = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/POR.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/POR.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var epl = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/ENG.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/ENG.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var wepl = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.wchampions/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.w.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var esp = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/ESP.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/ESP.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ger = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/GER.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/GER.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ita = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/ITA.1/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/ITA.1/scoreboard?dates=\(range.start)-\(range.end)"
         )!
 
         static var ffwc = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ffwwc = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.wwc/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.wwc/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ffwcquefa = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.uefa/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.uefa/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var concacaf = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.concacaf/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.concacaf/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var caf = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.caf/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.caf/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var conmebol = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.conmebol/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.conmebol/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var afc = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.afc/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.afc/scoreboard?dates=\(range.start)-\(range.end)"
         )!
         static var ofc = URL(
             string:
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.ofc/scoreboard"
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.worldq.ofc/scoreboard?dates=\(range.start)-\(range.end)"
         )!
 
         static var atp = URL(

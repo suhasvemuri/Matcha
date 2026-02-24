@@ -58,6 +58,7 @@ struct LeagueSettingsView: View {
     @AppStorage("enableCAF") private var enableCAF = false
     @AppStorage("enableAFC") private var enableAFC = false
     @AppStorage("enableOFC") private var enableOFC = false
+    @AppStorage("enableCricket") private var enableCricket = true
 
     @AppStorage("enableATP") private var enableATP = true
     @AppStorage("enableWTA") private var enableWTA = false
@@ -84,519 +85,90 @@ struct LeagueSettingsView: View {
                 .bold()
 
             Form {
+                Section("Core Sports") {
+                    Toggle(isOn: $enableCricket) {
+                        Label("Cricket (ICC + IPL)", systemImage: "sportscourt")
+                    }
+
+                    Toggle(isOn: $enableMLS) { Label("MLS", systemImage: "soccerball") }
+                    Toggle(isOn: $enableUEFA) { Label("Champions League", systemImage: "soccerball") }
+                    Toggle(isOn: $enableEPL) { Label("Premier League", systemImage: "soccerball") }
+                    Toggle(isOn: $enableESP) { Label("La Liga", systemImage: "soccerball") }
+                    Toggle(isOn: $enableGER) { Label("Bundesliga", systemImage: "soccerball") }
+                    Toggle(isOn: $enableITA) { Label("Serie A", systemImage: "soccerball") }
+                }
+
+                Section("Soccer International") {
+                    Toggle(isOn: $enableFFWC) { Label("FIFA World Cup", systemImage: "trophy") }
+                    Toggle(isOn: $enableFFWCQUEFA) { Label("UEFA Qualifiers", systemImage: "trophy") }
+                    Toggle(isOn: $enableCONMEBOL) { Label("CONMEBOL Qualifiers", systemImage: "trophy") }
+                    Toggle(isOn: $enableCONCACAF) { Label("CONCACAF Qualifiers", systemImage: "trophy") }
+                    Toggle(isOn: $enableCAF) { Label("CAF Qualifiers", systemImage: "trophy") }
+                    Toggle(isOn: $enableAFC) { Label("AFC Qualifiers", systemImage: "trophy") }
+                    Toggle(isOn: $enableOFC) { Label("OFC Qualifiers", systemImage: "trophy") }
+                }
+
+                Section("Optional Add-ons") {
+                    Toggle(isOn: $enableNBA) { Label("NBA", systemImage: "basketball") }
+                    Toggle(isOn: $enableNFL) { Label("NFL", systemImage: "football") }
+                    Toggle(isOn: $enableF1) { Label("F1", systemImage: "flag.checkered") }
+                }
+
                 Section {
-                    Toggle(isOn: $enableNHL) {
-                        HStack {
-                            Image(systemName: "hockey.puck")
-                                .foregroundColor(.secondary)
-                            Text("NHL")
-                        }
+                    Button("Apply Core Preset") {
+                        applyCorePreset()
                     }
+                    .buttonStyle(.borderedProminent)
 
-                    Toggle(isOn: $enableHNCAAM) {
-                        HStack {
-                            Image(systemName: "hockey.puck")
-                                .foregroundColor(.secondary)
-                            Text("Men's College Hockey")
-                        }
+                    Button("Disable Optional Add-ons") {
+                        enableNBA = false
+                        enableNFL = false
+                        enableF1 = false
                     }
-
-                    Toggle(isOn: $enableHNCAAF) {
-                        HStack {
-                            Image(systemName: "hockey.puck")
-                                .foregroundColor(.secondary)
-                            Text("Women's College Hockey")
-                        }
-                    }
-                } header: {
-                    HStack(spacing: 4) {
-                        HStack {
-                            Text("Hockey")
-                                .font(.headline)
-                            Spacer()
-
-                            Button(action: {
-                                enableNHL = false
-                                enableHNCAAM = false
-                                enableHNCAAF = false
-                                enableNBA = false
-                                enableWNBA = false
-                                enableNCAAM = false
-                                enableNCAAF = false
-                                enableNFL = false
-                                enableFNCAA = false
-                                enableMLB = false
-                                enableBNCAA = false
-                                enableSNCAA = false
-                                enableF1 = false
-                                enableNC = false
-                                enableNCS = false
-                                enableNCT = false
-                                enableIRL = false
-                                enablePGA = false
-                                enableLPGA = false
-                                enableUEFA = false
-                                enableEUEFA = false
-                                enableWUEFA = false
-                                enableMLS = false
-                                enableNWSL = false
-                                enableMEX = false
-                                enableFRA = false
-                                enableNED = false
-                                enablePOR = false
-                                enableEPL = false
-                                enableWEPL = false
-                                enableESP = false
-                                enableGER = false
-                                enableFFWC = false
-                                enableFFWWC = false
-                                enableFFWCQUEFA = false
-                                enableCONCACAF = false
-                                enableCONMEBOL = false
-                                enableCAF = false
-                                enableAFC = false
-                                enableOFC = false
-                                enableITA = false
-                                enableATP = false
-                                enableWTA = false
-                                enableUFC = false
-                                enableNLL = false
-                                enablePLL = false
-                                enableLNCAAM = false
-                                enableLNCAAF = false
-                                enableVNCAAM = false
-                                enableVNCAAF = false
-                                enableOMIHC = false
-                                enableOWIHC = false
-                            }) {
-                                HStack {
-                                    Image(systemName: "xmark.circle")
-                                    Text("Disable All")
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.secondary)
-                            .font(.subheadline)
-                        }
-                    }
-                }
-
-                Section("Basketball") {
-                    Toggle(isOn: $enableNBA) {
-                        HStack {
-                            Image(systemName: "basketball")
-                                .foregroundColor(.secondary)
-                            Text("NBA")
-                        }
-                    }
-
-                    Toggle(isOn: $enableWNBA) {
-                        HStack {
-                            Image(systemName: "basketball")
-                                .foregroundColor(.secondary)
-                            Text("WNBA")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNCAAM) {
-                        HStack {
-                            Image(systemName: "basketball")
-                                .foregroundColor(.secondary)
-                            Text("Men's College Basketball")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNCAAF) {
-                        HStack {
-                            Image(systemName: "basketball")
-                                .foregroundColor(.secondary)
-                            Text("Women's College Basketball")
-                        }
-                    }
-                }
-
-                Section("Football") {
-                    Toggle(isOn: $enableNFL) {
-                        HStack {
-                            Image(systemName: "football")
-                                .foregroundColor(.secondary)
-                            Text("NFL")
-                        }
-                    }
-
-                    Toggle(isOn: $enableFNCAA) {
-                        HStack {
-                            Image(systemName: "football")
-                                .foregroundColor(.secondary)
-                            Text("College Football")
-                        }
-                    }
-                }
-
-                Section("Baseball") {
-                    Toggle(isOn: $enableMLB) {
-                        HStack {
-                            Image(systemName: "baseball")
-                                .foregroundColor(.secondary)
-                            Text("MLB")
-                        }
-                    }
-
-                    Toggle(isOn: $enableBNCAA) {
-                        HStack {
-                            Image(systemName: "baseball")
-                                .foregroundColor(.secondary)
-                            Text("College Baseball")
-                        }
-                    }
-
-                    Toggle(isOn: $enableSNCAA) {
-                        HStack {
-                            Image(systemName: "baseball")
-                                .foregroundColor(.secondary)
-                            Text("College Softball")
-                        }
-                    }
-                }
-
-                Section("Soccer") {
-                    Toggle(isOn: $enableMLS) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("MLS")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNWSL) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("NWSL")
-                        }
-                    }
-
-                    Toggle(isOn: $enableUEFA) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Champions League")
-                        }
-                    }
-
-                    Toggle(isOn: $enableEUEFA) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Europa Champions League")
-                        }
-                    }
-
-                    Toggle(isOn: $enableWUEFA) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Women's Champions League")
-                        }
-                    }
-
-                    Toggle(isOn: $enableEPL) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Premier League")
-                        }
-                    }
-
-                    Toggle(isOn: $enableWEPL) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Women's Super League")
-                        }
-                    }
-
-                    Toggle(isOn: $enableESP) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("La Liga")
-                        }
-                    }
-
-                    Toggle(isOn: $enableGER) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Bundesliga")
-                        }
-                    }
-
-                    Toggle(isOn: $enableITA) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Serie A")
-                        }
-                    }
-
-                    Toggle(isOn: $enableMEX) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Liga MX")
-                        }
-                    }
-
-                    Toggle(isOn: $enableFRA) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Ligue 1")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNED) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Eredivisie")
-                        }
-                    }
-
-                    Toggle(isOn: $enablePOR) {
-                        HStack {
-                            Image(systemName: "soccerball")
-                                .foregroundColor(.secondary)
-                            Text("Primeira Liga")
-                        }
-                    }
-                }
-
-                Section("Racing") {
-                    Toggle(isOn: $enableF1) {
-                        HStack {
-                            Image(systemName: "flag.checkered")
-                                .foregroundColor(.secondary)
-                            Text("F1")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNC) {
-                        HStack {
-                            Image(systemName: "flag.checkered")
-                                .foregroundColor(.secondary)
-                            Text("Nascar Premier")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNCS) {
-                        HStack {
-                            Image(systemName: "flag.checkered")
-                                .foregroundColor(.secondary)
-                            Text("Nascar Secondary")
-                        }
-                    }
-
-                    Toggle(isOn: $enableNCT) {
-                        HStack {
-                            Image(systemName: "flag.checkered")
-                                .foregroundColor(.secondary)
-                            Text("Nascar Truck")
-                        }
-                    }
-
-                    Toggle(isOn: $enableIRL) {
-                        HStack {
-                            Image(systemName: "flag.checkered")
-                                .foregroundColor(.secondary)
-                            Text("IndyCar")
-                        }
-                    }
-                }
-
-                Section("Golf") {
-                    Toggle(isOn: $enablePGA) {
-                        HStack {
-                            Image(systemName: "figure.golf")
-                                .foregroundColor(.secondary)
-                            Text("PGA")
-                        }
-                    }
-
-                    Toggle(isOn: $enableLPGA) {
-                        HStack {
-                            Image(systemName: "figure.golf")
-                                .foregroundColor(.secondary)
-                            Text("LPGA")
-                        }
-                    }
-                }
-
-                Section("Tennis") {
-                    Toggle(isOn: $enableATP) {
-                        HStack {
-                            Image(systemName: "tennisball.fill")
-                                .foregroundColor(.secondary)
-                            Text("ATP Tour")
-                        }
-                    }
-
-                    Toggle(isOn: $enableWTA) {
-                        HStack {
-                            Image(systemName: "tennisball.fill")
-                                .foregroundColor(.secondary)
-                            Text("WTA Tour")
-                        }
-                    }
-                }
-
-                Section("Fighting") {
-                    Toggle(isOn: $enableUFC) {
-                        HStack {
-                            Image(systemName: "figure.boxing")
-                                .foregroundColor(.secondary)
-                            Text("UFC")
-                        }
-                    }
-                }
-
-                Section("Lacrosse") {
-                    Toggle(isOn: $enableNLL) {
-                        HStack {
-                            Image(systemName: "figure.lacrosse")
-                                .foregroundColor(.secondary)
-                            Text("NLL")
-                        }
-                    }
-
-                    Toggle(isOn: $enablePLL) {
-                        HStack {
-                            Image(systemName: "figure.lacrosse")
-                                .foregroundColor(.secondary)
-                            Text("PLL")
-                        }
-                    }
-
-                    Toggle(isOn: $enableLNCAAM) {
-                        HStack {
-                            Image(systemName: "figure.lacrosse")
-                                .foregroundColor(.secondary)
-                            Text("Men's College Lacrosse")
-                        }
-                    }
-
-                    Toggle(isOn: $enableLNCAAF) {
-                        HStack {
-                            Image(systemName: "figure.lacrosse")
-                                .foregroundColor(.secondary)
-                            Text("Women's College Lacrosse")
-                        }
-                    }
-                }
-
-                Section("Volleyball") {
-                    Toggle(isOn: $enableVNCAAM) {
-                        HStack {
-                            Image(systemName: "volleyball")
-                                .foregroundColor(.secondary)
-                            Text("Men's College Volleyball")
-                        }
-                    }
-
-                    Toggle(isOn: $enableVNCAAF) {
-                        HStack {
-                            Image(systemName: "volleyball")
-                                .foregroundColor(.secondary)
-                            Text("Women's College Volleyball")
-                        }
-                    }
-                }
-
-                Section("Olympics") {
-                    Toggle(isOn: $enableOMIHC) {
-                        HStack {
-                            Image(systemName: "medal")
-                                .foregroundColor(.secondary)
-                            Text("Men's Olympic Ice Hockey")
-                        }
-                    }
-
-                    Toggle(isOn: $enableOWIHC) {
-                        HStack {
-                            Image(systemName: "medal")
-                                .foregroundColor(.secondary)
-                            Text("Women's Olympic Ice Hockey")
-                        }
-                    }
-                }
-
-                Section("FIFA World Cup") {
-                    Toggle(isOn: $enableFFWC) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup")
-                        }
-                    }
-
-                    Toggle(isOn: $enableFFWWC) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA Women's World Cup")
-                        }
-                    }
-
-                    Toggle(isOn: $enableFFWCQUEFA) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup UEFA Qualifiers")
-                        }
-                    }
-
-                    Toggle(isOn: $enableCONMEBOL) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup COMEBOL Qualifiers")
-                        }
-                    }
-
-                    Toggle(isOn: $enableCONCACAF) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup CONCACAF Qualifiers")
-                        }
-                    }
-
-                    Toggle(isOn: $enableCAF) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup African Qualifiers")
-                        }
-                    }
-
-                    Toggle(isOn: $enableAFC) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup Asian Qualifiers")
-                        }
-                    }
-
-                    Toggle(isOn: $enableOFC) {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary)
-                            Text("FIFA World Cup Oceanian Qualifiers")
-                        }
-                    }
+                    .buttonStyle(.bordered)
                 }
             }
-        }.formStyle(.grouped)
+        }
+        .formStyle(.grouped)
+    }
+
+    private func applyCorePreset() {
+        // Disable non-priority sports/leagues.
+        enableNHL = false
+        enableHNCAAM = false
+        enableHNCAAF = false
+        enableWNBA = false
+        enableNCAAM = false
+        enableNCAAF = false
+        enableFNCAA = false
+        enableMLB = false
+        enableBNCAA = false
+        enableSNCAA = false
+        enableNC = false
+        enableNCS = false
+        enableNCT = false
+        enableIRL = false
+        enablePGA = false
+        enableLPGA = false
+        enableNWSL = false
+        enableEUEFA = false
+        enableWUEFA = false
+        enableMEX = false
+        enableFRA = false
+        enableNED = false
+        enablePOR = false
+        enableWEPL = false
+        enableFFWWC = false
+        enableATP = false
+        enableWTA = false
+        enableUFC = false
+        enableNLL = false
+        enablePLL = false
+        enableLNCAAM = false
+        enableLNCAAF = false
+        enableVNCAAM = false
+        enableVNCAAF = false
+        enableOMIHC = false
+        enableOWIHC = false
     }
 }

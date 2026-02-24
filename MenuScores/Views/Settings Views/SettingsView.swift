@@ -15,6 +15,7 @@ struct SettingsView: View {
         case general = "General"
         case behavior = "Behavior"
         case league = "Leagues"
+        case streaming = "Streaming"
 
         var id: String { rawValue }
     }
@@ -43,7 +44,7 @@ struct SettingsView: View {
                             .padding(.trailing, 3)
 
                         VStack(alignment: .leading) {
-                            Text("MenuScores")
+                            Text("Matcha")
                                 .font(.footnote)
                                 .bold()
 
@@ -76,6 +77,8 @@ struct SettingsView: View {
                     BehaviorSettingsView()
                 case .league:
                     LeagueSettingsView()
+                case .streaming:
+                    StreamingSettingsView()
                 default:
                     Text("Select a tab")
                 }
@@ -101,6 +104,7 @@ private extension SettingsView.Tab {
         case .general: return "gearshape"
         case .behavior: return "slider.horizontal.3"
         case .league: return "sportscourt"
+        case .streaming: return "play.tv"
         }
     }
 }

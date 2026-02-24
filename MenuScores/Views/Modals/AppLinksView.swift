@@ -20,7 +20,7 @@ struct AppLinksView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 5)
 
-            Text("MenuScores ")
+            Text("Matcha ")
                 .font(.title2)
                 .bold()
                 .foregroundColor(.primary)
@@ -44,7 +44,7 @@ struct AppLinksView: View {
                 Section {
                     ForEach(
                         [
-                            ("MenuScores Help", "https://github.com/daniyalmaster693/MenuScores"),
+                            ("Matcha Help", "https://github.com/daniyalmaster693/MenuScores"),
                             ("Feedback", "https://github.com/daniyalmaster693/MenuScores/issues/new"),
                             ("Changelog", "https://github.com/daniyalmaster693/MenuScores/releases"),
                             ("License", "https://github.com/daniyalmaster693/MenuScores/blob/main/License"),

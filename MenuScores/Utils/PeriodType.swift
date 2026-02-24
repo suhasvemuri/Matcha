@@ -41,7 +41,7 @@ func periodPrefix(for league: String) -> String {
         return ""
     case "EUEFA":
         return ""
-    case "FUEFA":
+    case "WUEFA":
         return ""
     case "EPL":
         return ""
