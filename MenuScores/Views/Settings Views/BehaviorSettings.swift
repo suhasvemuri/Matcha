@@ -9,6 +9,22 @@ import KeyboardShortcuts
 import SwiftUI
 import UserNotifications
 
+enum MatchaAppearanceMode: String, CaseIterable, Identifiable {
+    case liquidGlass
+    case frostedGlass
+    case darkFrosted
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .liquidGlass: return "Liquid Glass"
+        case .frostedGlass: return "Frosted Glass"
+        case .darkFrosted: return "Dark Frosted"
+        }
+    }
+}
+
 struct BehaviorSettingsView: View {
     @State private var notificationStatusMessage: String?
     @AppStorage("notiGameStart") private var notiGameStart = false
@@ -21,6 +37,7 @@ struct BehaviorSettingsView: View {
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
     @AppStorage("compactMode") private var compactMode = false
     @AppStorage("enableDemoMode") private var enableDemoMode = false
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
     let refreshOptions = [
         "10 seconds", "15 seconds", "20 seconds", "30 seconds", "40 seconds",
         "50 seconds", "1 minute", "2 minutes", "5 minutes",
@@ -119,6 +136,19 @@ struct BehaviorSettingsView: View {
                             }
                             .pickerStyle(.menu)
                             .frame(width: 150)
+                        }
+
+                        HStack {
+                            Label("Appearance", systemImage: "square.3.layers.3d")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Picker("", selection: $appearanceMode) {
+                                ForEach(MatchaAppearanceMode.allCases) { mode in
+                                    Text(mode.title).tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 170)
                         }
                     }
                 }

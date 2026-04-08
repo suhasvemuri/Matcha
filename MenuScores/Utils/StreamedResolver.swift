@@ -98,6 +98,7 @@ enum StreamedResolver {
     private struct RankedMatch {
         let item: APIMatch
         let score: Double
+        let timeDelta: TimeInterval
     }
 
     static func resolveMatchStreams(
@@ -115,25 +116,46 @@ enum StreamedResolver {
             return []
         }
 
-        let ranked = rank(matches: matches, query: query).prefix(4)
+        let ranked = rank(matches: matches, query: query, minimumScore: 1.35)
+        let relaxedRanked = rank(matches: matches, query: query, minimumScore: 0.35)
         var results: [IPTVResolver.MatchResolution] = []
 
-        let candidates = ranked.isEmpty ? matches.prefix(3).map { RankedMatch(item: $0, score: 2.3) } : Array(ranked)
+        let candidates = ranked.isEmpty ? Array(relaxedRanked.prefix(4)) : Array(ranked.prefix(4))
 
         for candidate in candidates {
             for source in candidate.item.sources.prefix(4) {
-                guard let streams = await fetchStreams(source: source, bases: bases), !streams.isEmpty else { continue }
+                if let streams = await fetchStreams(source: source, bases: bases), !streams.isEmpty {
+                    for stream in streams.prefix(3) {
+                        guard let url = normalizedStreamURL(from: stream.anyURLString, baseURLString: base) else { continue }
+                        let sourceName = stream.source ?? source.source
+                        let label = streamLabel(sourceName: sourceName, stream: stream)
+                        results.append(
+                            IPTVResolver.MatchResolution(
+                                streamURL: url,
+                                channelName: label,
+                                programTitle: candidate.item.title,
+                                confidence: min(0.95, 0.45 + candidate.score / 10.0),
+                                matchedBy: "streamed",
+                                requestHeaders: [:]
+                            )
+                        )
+                        if results.count >= limit {
+                            return dedupe(results, limit: limit)
+                        }
+                    }
+                    continue
+                }
 
-                for stream in streams.prefix(3) {
-                    guard let url = normalizedStreamURL(from: stream.anyURLString, baseURLString: base) else { continue }
-                    let sourceName = stream.source ?? source.source
-                    let label = streamLabel(sourceName: sourceName, stream: stream)
+                // Some providers return stream links lazily only on the watch page.
+                if let watchURL = watchPageURL(for: source.id, bases: bases) {
+                    let sourceName = source.source.uppercased()
+                    let label = "Streamed \(sourceName) • Watch"
                     results.append(
                         IPTVResolver.MatchResolution(
-                            streamURL: url,
+                            streamURL: watchURL,
                             channelName: label,
                             programTitle: candidate.item.title,
-                            confidence: min(0.95, 0.45 + candidate.score / 10.0),
+                            confidence: min(0.85, 0.35 + candidate.score / 12.0),
                             matchedBy: "streamed",
                             requestHeaders: [:]
                         )
@@ -148,7 +170,7 @@ enum StreamedResolver {
         return dedupe(results, limit: limit)
     }
 
-    private static func rank(matches: [APIMatch], query: IPTVResolver.MatchQuery) -> [RankedMatch] {
+    private static func rank(matches: [APIMatch], query: IPTVResolver.MatchQuery, minimumScore: Double) -> [RankedMatch] {
         let now = Date()
         let qSport = normalize(query.sport)
         let qLeague = normalize(query.league)
@@ -187,12 +209,18 @@ enum StreamedResolver {
             if timeDelta <= 45 * 60 { score += 1.5 }
             else if timeDelta <= 2.5 * 60 * 60 { score += 0.8 }
 
-            if score < 1.35 { return nil }
-            return RankedMatch(item: match, score: score)
+            // For relaxed scoring, still require either sport alignment or both team names.
+            let sportAligned = isSportAligned(querySport: qSport, category: category, title: title)
+            if minimumScore < 1.0, !sportAligned, !(homeHits > 0 && awayHits > 0) {
+                return nil
+            }
+
+            if score < minimumScore { return nil }
+            return RankedMatch(item: match, score: score, timeDelta: timeDelta)
         }
         .sorted { lhs, rhs in
             if lhs.score == rhs.score {
-                return lhs.item.date < rhs.item.date
+                return lhs.timeDelta < rhs.timeDelta
             }
             return lhs.score > rhs.score
         }
@@ -213,6 +241,20 @@ enum StreamedResolver {
 
     private static func normalize(_ value: String) -> String {
         IPTVResolver.normalize(value)
+    }
+
+    private static func isSportAligned(querySport: String, category: String, title: String) -> Bool {
+        let aliases: [String]
+        switch querySport {
+        case "soccer":
+            aliases = ["soccer", "football"]
+        default:
+            aliases = [querySport]
+        }
+
+        return aliases.contains(where: { alias in
+            category.contains(alias) || title.contains(alias)
+        })
     }
 
     private static func dedupe(_ values: [IPTVResolver.MatchResolution], limit: Int) -> [IPTVResolver.MatchResolution] {
@@ -244,9 +286,18 @@ enum StreamedResolver {
     }
 
     private static func fetchMatches(query: IPTVResolver.MatchQuery, bases: [String]) async -> [APIMatch]? {
-        let matchPaths = query.isLive
+        let sportPath = sportMatchesPath(for: query.sport)
+        var matchPaths: [String] = query.isLive
             ? ["/api/matches/live", "/api/matches/all-today", "/api/matches/all"]
             : ["/api/matches/all-today", "/api/matches/live", "/api/matches/all"]
+
+        if let sportPath {
+            if query.isLive {
+                matchPaths.insert(sportPath, at: 1)
+            } else {
+                matchPaths.insert(sportPath, at: 0)
+            }
+        }
 
         for base in bases {
             for path in matchPaths {
@@ -257,6 +308,23 @@ enum StreamedResolver {
             }
         }
         return nil
+    }
+
+    private static func sportMatchesPath(for sport: String) -> String? {
+        switch normalize(sport) {
+        case "soccer":
+            return "/api/matches/football"
+        case "cricket":
+            return "/api/matches/cricket"
+        case "basketball":
+            return "/api/matches/basketball"
+        case "american football":
+            return "/api/matches/american-football"
+        case "f1", "formula 1":
+            return "/api/matches/formula-1"
+        default:
+            return nil
+        }
     }
 
     private static func fetchStreams(source: APIMatch.Source, bases: [String]) async -> [APIStream]? {
@@ -291,6 +359,18 @@ enum StreamedResolver {
         }
         if let base = URL(string: baseURLString), let relative = URL(string: trimmed, relativeTo: base)?.absoluteURL {
             return relative
+        }
+        return nil
+    }
+
+    private static func watchPageURL(for sourceID: String, bases: [String]) -> URL? {
+        let trimmed = sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? trimmed
+        for base in bases {
+            if let url = URL(string: "\(base)/watch/\(encoded)") {
+                return url
+            }
         }
         return nil
     }

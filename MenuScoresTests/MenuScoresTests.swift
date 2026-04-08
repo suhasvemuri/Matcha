@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import MenuScores
+@testable import Matcha
 
 struct MenuScoresTests {
 

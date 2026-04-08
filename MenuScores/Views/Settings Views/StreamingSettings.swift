@@ -20,7 +20,7 @@ private enum SearchSportFilter: String, CaseIterable, Identifiable {
 struct StreamingSettingsView: View {
     @AppStorage("iptvM3UURL") private var iptvM3UURL = ""
     @AppStorage("iptvEPGURL") private var iptvEPGURL = ""
-    @AppStorage("enableStreamedProvider") private var enableStreamedProvider = false
+    @AppStorage("enableStreamedProvider") private var enableStreamedProvider = true
     @AppStorage("streamedBaseURL") private var streamedBaseURL = "https://streamed.st"
     @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
     @AppStorage("favoriteSoccerCsv") private var legacyFavoriteSoccerCsv = ""
@@ -211,22 +211,14 @@ struct StreamingSettingsView: View {
                 }
 
                 Section("Streamed Provider") {
-                    Toggle("Enable streamed.st / streamed.pk provider", isOn: $enableStreamedProvider)
-
                     TextField("Streamed API base URL", text: $streamedBaseURL)
                         .textFieldStyle(.roundedBorder)
 
-                    if enableStreamedProvider {
-                        Label("Enabled as fallback stream source", systemImage: "checkmark.circle.fill")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-                    } else {
-                        Label("Disabled", systemImage: "minus.circle")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
+                    Label("Always enabled as primary stream source", systemImage: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
 
-                    Text("When enabled, Matcha also queries Streamed match APIs and adds matching streams in Where to Watch.")
+                    Text("Matcha queries Streamed first and falls back to IPTV channels when needed.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -318,6 +310,9 @@ struct StreamingSettingsView: View {
             .formStyle(.grouped)
         }
         .task {
+            if !enableStreamedProvider {
+                enableStreamedProvider = true
+            }
             await loadSoccerTeamCatalogIfNeeded()
         }
         .onChange(of: iptvM3UURL) { newValue in

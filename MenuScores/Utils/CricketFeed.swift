@@ -174,6 +174,12 @@ struct CricketMatch: Identifiable, Equatable {
     }
 
     var menubarText: String {
+        if isLive {
+            if let context = conciseLiveContext {
+                return "\(scoreLine) • \(context)"
+            }
+            return scoreLine
+        }
         if isUpcoming {
             return "\(team1Short) vs \(team2Short) - \(matchDesc)"
         }
@@ -181,6 +187,30 @@ struct CricketMatch: Identifiable, Equatable {
             return "\(scoreLine)  \(status)"
         }
         return scoreLine
+    }
+
+    var conciseLiveContext: String? {
+        let candidates = [status, detail, matchDesc]
+        for raw in candidates {
+            let cleaned = raw
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { continue }
+            let lower = cleaned.lowercased()
+
+            // Skip noisy toss-only context for menu bar pin text.
+            if lower.contains("opt to bowl")
+                || lower.contains("opt to bat")
+                || lower.contains("won the toss")
+                || lower == "live"
+                || lower == "in progress"
+            {
+                continue
+            }
+
+            return cleaned
+        }
+        return nil
     }
 }
 

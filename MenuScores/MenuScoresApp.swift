@@ -20,6 +20,7 @@ struct MenuScoresApp: App {
     // Refresh Interval Settings
 
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
+    @State private var autoRefreshTask: Task<Void, Never>?
 
     private var refreshInterval: TimeInterval {
         switch selectedOption {
@@ -133,6 +134,21 @@ struct MenuScoresApp: App {
         if enableAFC { await afcVM.populateGames(from: Scoreboard.Urls.afc) }
         if enableOFC { await ofcVM.populateGames(from: Scoreboard.Urls.ofc) }
         if enableCricket { await cricketVM.populateMatches() }
+    }
+
+    private func configureAutoRefreshLoop() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = Task {
+            await refreshAllLeagues()
+
+            while !Task.isCancelled {
+                let interval = max(refreshInterval, 10)
+                let nanos = UInt64(interval * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                if Task.isCancelled { break }
+                await refreshAllLeagues()
+            }
+        }
     }
 
     private func clearPinnedGame() {
@@ -304,6 +320,12 @@ struct MenuScoresApp: App {
                 Image(systemName: "soccerball")
                     .symbolRenderingMode(.monochrome)
                 Text(currentTitle)
+            }
+            .task(id: selectedOption) {
+                configureAutoRefreshLoop()
+            }
+            .onDisappear {
+                autoRefreshTask?.cancel()
             }
         }
         .menuBarExtraStyle(.window)

@@ -23,23 +23,449 @@ private enum DashboardDateFormatters {
 }
 
 private struct MenuWindowConfigurator: NSViewRepresentable {
+    var onWindowAvailable: ((NSWindow) -> Void)? = nil
+
+    final class Coordinator {
+        weak var configuredWindow: NSWindow?
+        var appearanceMode: String?
+        var resizeObserver: NSObjectProtocol?
+        var liveResizeEndObserver: NSObjectProtocol?
+
+        deinit {
+            if let resizeObserver {
+                NotificationCenter.default.removeObserver(resizeObserver)
+            }
+            if let liveResizeEndObserver {
+                NotificationCenter.default.removeObserver(liveResizeEndObserver)
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.styleMask.insert(.resizable)
-            window.minSize = NSSize(width: 336, height: 420)
-            window.maxSize = NSSize(width: 520, height: 920)
+            configureWindowIfNeeded(view.window, coordinator: context.coordinator)
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            window.styleMask.insert(.resizable)
-            window.minSize = NSSize(width: 336, height: 420)
-            window.maxSize = NSSize(width: 520, height: 920)
+            configureWindowIfNeeded(nsView.window, coordinator: context.coordinator)
+        }
+    }
+
+    private func configureWindowIfNeeded(_ window: NSWindow?, coordinator: Coordinator) {
+        guard let window else { return }
+        let desiredMinSize = NSSize(width: 336, height: 420)
+        let desiredMaxSize = NSSize(width: 520, height: 920)
+        let appearanceMode = MatchaChromeStyle.mode(from: UserDefaults.standard.string(forKey: "matchaAppearanceMode"))
+        let chromeBackground = MatchaChromeStyle.windowBackground(for: appearanceMode)
+
+        let needsUpdate = coordinator.configuredWindow !== window
+            || !window.styleMask.contains(.resizable)
+            || window.minSize != desiredMinSize
+            || window.maxSize != desiredMaxSize
+            || coordinator.appearanceMode != appearanceMode.rawValue
+
+        guard needsUpdate else { return }
+
+        window.styleMask.insert(.resizable)
+        window.minSize = desiredMinSize
+        window.maxSize = desiredMaxSize
+        window.isOpaque = false
+        window.backgroundColor = chromeBackground
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.hasShadow = true
+        window.isMovableByWindowBackground = false
+        if let contentView = window.contentView {
+            contentView.wantsLayer = true
+            contentView.layerContentsRedrawPolicy = .duringViewResize
+            contentView.layer?.masksToBounds = true
+            contentView.layer?.cornerRadius = 18
+            contentView.layer?.cornerCurve = .continuous
+            contentView.layer?.backgroundColor = chromeBackground.cgColor
+        }
+        syncHostedContentLayout(in: window)
+        installResizeObserversIfNeeded(for: window, coordinator: coordinator)
+        coordinator.configuredWindow = window
+        coordinator.appearanceMode = appearanceMode.rawValue
+        onWindowAvailable?(window)
+    }
+
+    private func installResizeObserversIfNeeded(for window: NSWindow, coordinator: Coordinator) {
+        guard coordinator.resizeObserver == nil, coordinator.liveResizeEndObserver == nil else { return }
+
+        coordinator.resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            syncHostedContentLayout(in: window)
+        }
+
+        coordinator.liveResizeEndObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didEndLiveResizeNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            syncHostedContentLayout(in: window)
+        }
+    }
+
+    private func syncHostedContentLayout(in window: NSWindow) {
+        guard let contentView = window.contentView else { return }
+        let targetFrame = contentView.bounds
+        let targetSize = targetFrame.size
+
+        window.contentViewController?.preferredContentSize = targetSize
+
+        if let controllerView = window.contentViewController?.view {
+            controllerView.translatesAutoresizingMaskIntoConstraints = true
+            controllerView.autoresizingMask = [.width, .height]
+            if controllerView.frame != targetFrame {
+                controllerView.frame = targetFrame
+            }
+            controllerView.invalidateIntrinsicContentSize()
+            controllerView.needsLayout = true
+            controllerView.layoutSubtreeIfNeeded()
+        }
+
+        for subview in contentView.subviews {
+            subview.translatesAutoresizingMaskIntoConstraints = true
+            subview.autoresizingMask = [.width, .height]
+            if subview.frame != targetFrame {
+                subview.frame = targetFrame
+            }
+            subview.invalidateIntrinsicContentSize()
+            subview.needsLayout = true
+            subview.layoutSubtreeIfNeeded()
+        }
+
+        contentView.needsLayout = true
+        contentView.layoutSubtreeIfNeeded()
+    }
+}
+
+private enum MatchaChromeStyle {
+    static func mode(from rawValue: String?) -> MatchaAppearanceMode {
+        MatchaAppearanceMode(rawValue: rawValue ?? "") ?? .liquidGlass
+    }
+
+    static func windowBackground(for mode: MatchaAppearanceMode) -> NSColor {
+        switch mode {
+        case .liquidGlass:
+            return NSColor(calibratedRed: 0.26, green: 0.30, blue: 0.36, alpha: 0.42)
+        case .frostedGlass:
+            return NSColor(calibratedRed: 0.34, green: 0.38, blue: 0.44, alpha: 0.58)
+        case .darkFrosted:
+            return NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.12, alpha: 0.92)
+        }
+    }
+}
+
+private struct MatchaChromePanelModifier: ViewModifier {
+    let corner: CGFloat
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func body(content: Content) -> some View {
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+        content
+            .background(chromeFill(for: mode, shape: shape))
+            .overlay(
+                shape.stroke(borderColor(for: mode), lineWidth: 0.7)
+            )
+            .shadow(color: shadowColor(for: mode), radius: shadowRadius(for: mode), y: 3)
+    }
+
+    @ViewBuilder
+    private func chromeFill(for mode: MatchaAppearanceMode, shape: RoundedRectangle) -> some View {
+        switch mode {
+        case .liquidGlass:
+            shape
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.12),
+                                Color.white.opacity(0.05),
+                                Color.black.opacity(0.05),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.22),
+                                Color.white.opacity(0.04),
+                                Color.clear,
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .overlay(alignment: .topLeading) {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.34),
+                                    Color.white.opacity(0.08),
+                                    Color.clear,
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 220, height: 22)
+                        .offset(x: 18, y: 10)
+                        .blur(radius: 8)
+                        .blendMode(.screen)
+                        .allowsHitTesting(false)
+                }
+        case .frostedGlass:
+            shape
+                .background(.regularMaterial, in: shape)
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.09),
+                                Color(red: 0.58, green: 0.62, blue: 0.68).opacity(0.05),
+                                Color(red: 0.30, green: 0.34, blue: 0.40).opacity(0.20),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .overlay(
+                    shape.fill(Color.white.opacity(0.025))
+                )
+        case .darkFrosted:
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.18, green: 0.20, blue: 0.25).opacity(0.92),
+                            Color(red: 0.08, green: 0.10, blue: 0.14).opacity(0.96),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .background(.regularMaterial, in: shape)
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.02),
+                                Color.black.opacity(0.12),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+        }
+    }
+
+    private func borderColor(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.20)
+        case .frostedGlass:
+            return Color.white.opacity(0.12)
+        case .darkFrosted:
+            return Color.white.opacity(0.08)
+        }
+    }
+
+    private func shadowColor(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return .black.opacity(0.11)
+        case .frostedGlass:
+            return .black.opacity(0.10)
+        case .darkFrosted:
+            return .black.opacity(0.18)
+        }
+    }
+
+    private func shadowRadius(for mode: MatchaAppearanceMode) -> CGFloat {
+        switch mode {
+        case .liquidGlass: return 13
+        case .frostedGlass: return 11
+        case .darkFrosted: return 10
+        }
+    }
+}
+
+private struct MatchaSectionCardModifier: ViewModifier {
+    let corner: CGFloat
+    let fillOpacity: CGFloat
+    let strokeOpacity: CGFloat
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func body(content: Content) -> some View {
+        let normalizedFill = max(0.0, min(fillOpacity, 1.0))
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+
+        return content
+            .padding(8)
+            .background(
+                shape.fill(sectionGradient(for: mode, fill: normalizedFill))
+            )
+            .overlay(
+                shape.stroke(sectionStroke(for: mode, extra: strokeOpacity), lineWidth: 0.65)
+            )
+    }
+
+    private func sectionGradient(for mode: MatchaAppearanceMode, fill: CGFloat) -> LinearGradient {
+        switch mode {
+        case .liquidGlass:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.12 + (0.03 * fill)),
+                    Color.white.opacity(0.05 + (0.01 * fill)),
+                    Color(red: 0.24, green: 0.28, blue: 0.34).opacity(0.24 + (0.08 * fill)),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .frostedGlass:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.10 + (0.03 * fill)),
+                    Color(red: 0.58, green: 0.62, blue: 0.69).opacity(0.05 + (0.02 * fill)),
+                    Color(red: 0.28, green: 0.31, blue: 0.37).opacity(0.26 + (0.08 * fill)),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .darkFrosted:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.05 + (0.03 * fill)),
+                    Color(red: 0.12, green: 0.14, blue: 0.19).opacity(0.66 + (0.08 * fill)),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private func sectionStroke(for mode: MatchaAppearanceMode, extra: CGFloat) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.11 + extra)
+        case .frostedGlass:
+            return Color.white.opacity(0.08 + extra)
+        case .darkFrosted:
+            return Color.white.opacity(0.04 + extra)
+        }
+    }
+}
+
+private struct MatchaSubtleCardModifier: ViewModifier {
+    let corner: CGFloat
+    let fillOpacity: CGFloat
+    let strokeOpacity: CGFloat
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func body(content: Content) -> some View {
+        let normalizedFill = max(0.0, min(fillOpacity, 1.0))
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+
+        return content
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                shape.fill(subtleGradient(for: mode, fill: normalizedFill))
+            )
+            .overlay(
+                shape.stroke(subtleStroke(for: mode, extra: strokeOpacity), lineWidth: 0.7)
+            )
+    }
+
+    private func subtleGradient(for mode: MatchaAppearanceMode, fill: CGFloat) -> LinearGradient {
+        switch mode {
+        case .liquidGlass:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.07 + (0.02 * fill)),
+                    Color.white.opacity(0.03 + (0.01 * fill)),
+                    Color(red: 0.20, green: 0.24, blue: 0.30).opacity(0.20 + (0.08 * fill)),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .frostedGlass:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.05 + (0.02 * fill)),
+                    Color(red: 0.34, green: 0.38, blue: 0.45).opacity(0.24 + fill),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .darkFrosted:
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.025 + (0.01 * fill)),
+                    Color(red: 0.10, green: 0.11, blue: 0.15).opacity(0.48 + fill),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private func subtleStroke(for mode: MatchaAppearanceMode, extra: CGFloat) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.08 + extra)
+        case .frostedGlass:
+            return Color.white.opacity(0.06 + extra)
+        case .darkFrosted:
+            return Color.white.opacity(0.03 + extra)
+        }
+    }
+}
+
+private struct WindowAccessor: NSViewRepresentable {
+    let onWindowAvailable: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                onWindowAvailable(window)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                onWindowAvailable(window)
+            }
         }
     }
 }
@@ -59,7 +485,7 @@ struct MatchaDashboardView: View {
 
     @AppStorage("iptvM3UURL") private var iptvM3UURL = ""
     @AppStorage("iptvEPGURL") private var iptvEPGURL = ""
-    @AppStorage("enableStreamedProvider") private var enableStreamedProvider = false
+    @AppStorage("enableStreamedProvider") private var enableStreamedProvider = true
     @AppStorage("streamedBaseURL") private var streamedBaseURL = "https://streamed.st"
     @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
     @AppStorage("favoriteSoccerCsv") private var favoriteSoccerCsv = ""
@@ -71,13 +497,21 @@ struct MatchaDashboardView: View {
     @State private var selectedDetail: MatchDetailSelection?
     @State private var searchText: String = ""
     @State private var isSearchExpanded = false
+    @State private var showRecentResults = false
     @State private var visibilityFilter: MatchVisibilityFilter = .all
     @AppStorage("matchaSelectedMatchID") private var persistedSelectedMatchID = ""
     @State private var hasRestoredPersistedSelection = false
     @State private var preloadedWatchOptionsByMatchID: [String: [IPTVResolver.MatchResolution]] = [:]
     @State private var watchPreloadInFlight: Set<String> = []
+    @State private var watchPreloadCycle = 0
+    @State private var menuWindow: NSWindow?
+    @State private var detailWindow: NSWindow?
     @AppStorage("compactMode") private var compactMode = false
     private let turfGreen = Color(red: 0.19, green: 0.56, blue: 0.33)
+    private let menuMinSize = CGSize(width: 336, height: 420)
+    private let menuMaxSize = CGSize(width: 520, height: 920)
+    private let detailMinSize = CGSize(width: 352, height: 460)
+    private let detailMaxSize = CGSize(width: 488, height: 900)
 
     private var maxDisplayedMatches: Int {
         compactMode ? 30 : 20
@@ -215,6 +649,13 @@ struct MatchaDashboardView: View {
         let cricket: CricketMatch?
     }
 
+    private struct MatchDisplaySnapshot {
+        let visible: [UnifiedMatch]
+        let primary: [UnifiedMatch]
+        let recentCompleted: [UnifiedMatch]
+        let liveCount: Int
+    }
+
     private var allMatches: [UnifiedMatch] {
         let soccer: [UnifiedMatch] = favoriteSoccerGames.map { item in
             UnifiedMatch(
@@ -239,32 +680,71 @@ struct MatchaDashboardView: View {
         return soccer + cricket
     }
 
-    private var displayedMatches: [UnifiedMatch] {
-        let live = allMatches.filter(matchIsLive).sorted { $0.sortDate < $1.sortDate }
-        let upcoming = allMatches.filter(matchIsUpcoming).sorted { $0.sortDate < $1.sortDate }
-        let completedRecent = allMatches
-            .filter { matchIsCompleted($0) && isWithinRecentCompletedWindow($0.sortDate) }
-            .sorted { $0.sortDate > $1.sortDate }
+    private var displaySnapshot: MatchDisplaySnapshot {
+        var live: [UnifiedMatch] = []
+        var upcoming: [UnifiedMatch] = []
+        var completedRecent: [UnifiedMatch] = []
 
-        let base: [UnifiedMatch]
-        if visibilityFilter == .live {
-            base = live
-        } else {
-            base = live + upcoming + completedRecent
+        for match in allMatches {
+            if matchIsLive(match) {
+                live.append(match)
+            } else if matchIsUpcoming(match) {
+                upcoming.append(match)
+            } else if isWithinRecentCompletedWindow(match.sortDate) {
+                completedRecent.append(match)
+            }
         }
-        return Array(base.prefix(maxDisplayedMatches))
+
+        live.sort { $0.sortDate < $1.sortDate }
+        upcoming.sort { $0.sortDate < $1.sortDate }
+        completedRecent.sort { $0.sortDate > $1.sortDate }
+
+        let visible: [UnifiedMatch]
+        if visibilityFilter == .live {
+            visible = Array(live.prefix(maxDisplayedMatches))
+        } else {
+            visible = Array((live + upcoming + completedRecent).prefix(maxDisplayedMatches))
+        }
+
+        var primary: [UnifiedMatch] = []
+        var recentCompleted: [UnifiedMatch] = []
+        var liveCount = 0
+
+        for match in visible {
+            if match.isLive { liveCount += 1 }
+            if matchIsCompleted(match) {
+                recentCompleted.append(match)
+            } else {
+                primary.append(match)
+            }
+        }
+
+        return MatchDisplaySnapshot(
+            visible: visible,
+            primary: primary,
+            recentCompleted: recentCompleted,
+            liveCount: liveCount
+        )
+    }
+
+    private var displayedMatches: [UnifiedMatch] {
+        displaySnapshot.visible
     }
 
     private var primaryDisplayedMatches: [UnifiedMatch] {
-        displayedMatches.filter { !matchIsCompleted($0) }
+        displaySnapshot.primary
     }
 
     private var recentCompletedDisplayedMatches: [UnifiedMatch] {
-        displayedMatches.filter(matchIsCompleted)
+        displaySnapshot.recentCompleted
     }
 
     private var liveMatchesCount: Int {
-        displayedMatches.filter(\.isLive).count
+        displaySnapshot.liveCount
+    }
+
+    private var visibleMatchCount: Int {
+        primaryDisplayedMatches.count + (showRecentResults ? recentCompletedDisplayedMatches.count : 0)
     }
 
     private func matchIsLive(_ unified: UnifiedMatch) -> Bool {
@@ -437,16 +917,33 @@ struct MatchaDashboardView: View {
     }
 
     private var watchPreloadSignature: String {
-        let matchIDs = displayedMatches
+        let matchIDs = displaySnapshot.visible
             .filter(isLiveOrUpcoming)
-            .prefix(10)
+            .prefix(6)
             .map(\.id)
             .joined(separator: ",")
-        return "\(iptvM3UURL)|\(iptvEPGURL)|\(enableStreamedProvider)|\(streamedBaseURL)|\(matchIDs)"
+        return "\(iptvM3UURL)|\(iptvEPGURL)|\(enableStreamedProvider)|\(streamedBaseURL)|\(matchIDs)|\(watchPreloadCycle)"
     }
 
     private var selectionRestoreSignature: String {
-        "\(persistedSelectedMatchID)|\(displayedMatches.map(\.id).joined(separator: ","))"
+        "\(persistedSelectedMatchID)|\(displaySnapshot.visible.map(\.id).joined(separator: ","))"
+    }
+
+    private var pinnedTitleRefreshSignature: String {
+        let soccerSig = effectiveSoccerFeeds.flatMap { feed in
+            feed.games.map { game in
+                let competitors = game.competitions.first?.competitors ?? []
+                let awayScore = competitors.count > 1 ? (competitors[1].score ?? "-") : "-"
+                let homeScore = competitors.count > 0 ? (competitors[0].score ?? "-") : "-"
+                return "\(feed.leagueCode):\(game.id):\(game.status.type.state):\(awayScore):\(homeScore)"
+            }
+        }.joined(separator: "|")
+
+        let cricketSig = effectiveCricketMatches
+            .map { "\($0.id):\($0.team1Score):\($0.team2Score):\($0.state):\($0.status)" }
+            .joined(separator: "|")
+
+        return "\(currentGameID)|\(soccerSig)|\(cricketSig)"
     }
 
     private var demoShowcaseItems: [(title: String, detail: String, status: String)] {
@@ -639,31 +1136,66 @@ struct MatchaDashboardView: View {
     }
 
     var body: some View {
-        leftPane
-            .padding(0)
-            .background(Color.clear)
-            .frame(
+        GeometryReader { proxy in
+            leftPane
+                .padding(0)
+                .background(Color.clear)
+                .frame(
+                    width: max(proxy.size.width, 336),
+                    height: max(proxy.size.height, 420),
+                    alignment: .topLeading
+                )
+        }
+        .frame(
             minWidth: 336,
             idealWidth: 388,
+            maxWidth: .infinity,
             minHeight: 420,
-            idealHeight: 540
+            idealHeight: 540,
+            maxHeight: .infinity,
+            alignment: .topLeading
         )
-        .background(MenuWindowConfigurator())
+        .background(MenuWindowConfigurator { window in
+            if menuWindow !== window {
+                menuWindow = window
+            }
+        })
         .popover(item: $selectedDetail, arrowEdge: .trailing) { detail in
             rightPane(for: detail, enableDataFetch: true)
-                .frame(minWidth: 352, idealWidth: 412, maxWidth: 488, minHeight: 460, idealHeight: 620, maxHeight: 900)
-                .padding(4)
+                .frame(minWidth: detailMinSize.width, idealWidth: 412, maxWidth: detailMaxSize.width, minHeight: detailMinSize.height, idealHeight: 620, maxHeight: detailMaxSize.height)
+                .padding(2)
+                .background(WindowAccessor { window in
+                    if detailWindow !== window {
+                        detailWindow = window
+                    }
+                })
         }
         .task(id: watchPreloadSignature) {
             await preloadWatchOptionsForVisibleMatches()
         }
+        .task(id: hasAnyWatchProviderConfigured) {
+            guard hasAnyWatchProviderConfigured else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                if Task.isCancelled { break }
+                watchPreloadCycle &+= 1
+            }
+        }
+        .task {
+            if !enableStreamedProvider {
+                enableStreamedProvider = true
+            }
+        }
         .task(id: selectionRestoreSignature) {
             restorePersistedSelectionIfNeeded()
+        }
+        .task(id: pinnedTitleRefreshSignature) {
+            refreshPinnedTitleIfNeeded()
         }
     }
 
     private var leftPane: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             header
             if isSearchExpanded {
                 searchPanel
@@ -687,14 +1219,12 @@ struct MatchaDashboardView: View {
                             ForEach(primaryDisplayedMatches) { unified in
                                 if let item = unified.soccer {
                                     Button {
-                                        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-                                            if activeSelectedMatchID == "soccer-\(item.id)" {
-                                                selectedDetail = nil
-                                                persistedSelectedMatchID = ""
-                                            } else {
-                                                selectedDetail = .soccer(item)
-                                                persistedSelectedMatchID = "soccer-\(item.id)"
-                                            }
+                                        if activeSelectedMatchID == "soccer-\(item.id)" {
+                                            selectedDetail = nil
+                                            persistedSelectedMatchID = ""
+                                        } else {
+                                            selectedDetail = .soccer(item)
+                                            persistedSelectedMatchID = "soccer-\(item.id)"
                                         }
                                     } label: {
                                         SoccerMatchCard(
@@ -705,14 +1235,12 @@ struct MatchaDashboardView: View {
                                     .buttonStyle(.plain)
                                 } else if let match = unified.cricket {
                                     Button {
-                                        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-                                            if activeSelectedMatchID == "cricket-\(match.id)" {
-                                                selectedDetail = nil
-                                                persistedSelectedMatchID = ""
-                                            } else {
-                                                selectedDetail = .cricket(match)
-                                                persistedSelectedMatchID = "cricket-\(match.id)"
-                                            }
+                                        if activeSelectedMatchID == "cricket-\(match.id)" {
+                                            selectedDetail = nil
+                                            persistedSelectedMatchID = ""
+                                        } else {
+                                            selectedDetail = .cricket(match)
+                                            persistedSelectedMatchID = "cricket-\(match.id)"
                                         }
                                     } label: {
                                         CricketMatchCard(
@@ -725,25 +1253,32 @@ struct MatchaDashboardView: View {
                             }
 
                             if visibilityFilter == .all && !recentCompletedDisplayedMatches.isEmpty {
-                                HStack(spacing: 8) {
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.14))
-                                        .frame(height: 0.5)
-                                    Text("Recent Results")
-                                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.58))
-                                        .lineLimit(1)
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.14))
-                                        .frame(height: 0.5)
-                                }
-                                .padding(.top, 4)
-                                .padding(.bottom, 2)
-
-                                ForEach(recentCompletedDisplayedMatches) { unified in
-                                    if let item = unified.soccer {
+                                if showRecentResults {
+                                    HStack(spacing: 8) {
+                                        Rectangle()
+                                            .fill(Color.white.opacity(0.14))
+                                            .frame(height: 0.5)
+                                        MatchaSectionHeading(title: "Recent Results")
+                                        Rectangle()
+                                            .fill(Color.white.opacity(0.14))
+                                            .frame(height: 0.5)
                                         Button {
-                                            withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
+                                            withAnimation(.easeInOut(duration: 0.22)) {
+                                                showRecentResults = false
+                                            }
+                                        } label: {
+                                            Image(systemName: "chevron.up")
+                                                .font(.system(size: 9.5, weight: .semibold))
+                                        }
+                                        .buttonStyle(MatchaMiniControlButtonStyle())
+                                        .help("Hide recent results")
+                                    }
+                                    .padding(.top, 4)
+                                    .padding(.bottom, 2)
+
+                                    ForEach(recentCompletedDisplayedMatches) { unified in
+                                        if let item = unified.soccer {
+                                            Button {
                                                 if activeSelectedMatchID == "soccer-\(item.id)" {
                                                     selectedDetail = nil
                                                     persistedSelectedMatchID = ""
@@ -751,17 +1286,15 @@ struct MatchaDashboardView: View {
                                                     selectedDetail = .soccer(item)
                                                     persistedSelectedMatchID = "soccer-\(item.id)"
                                                 }
+                                            } label: {
+                                                SoccerMatchCard(
+                                                    item: item,
+                                                    isSelected: activeSelectedMatchID == "soccer-\(item.id)"
+                                                )
                                             }
-                                        } label: {
-                                            SoccerMatchCard(
-                                                item: item,
-                                                isSelected: activeSelectedMatchID == "soccer-\(item.id)"
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    } else if let match = unified.cricket {
-                                        Button {
-                                            withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
+                                            .buttonStyle(.plain)
+                                        } else if let match = unified.cricket {
+                                            Button {
                                                 if activeSelectedMatchID == "cricket-\(match.id)" {
                                                     selectedDetail = nil
                                                     persistedSelectedMatchID = ""
@@ -769,83 +1302,104 @@ struct MatchaDashboardView: View {
                                                     selectedDetail = .cricket(match)
                                                     persistedSelectedMatchID = "cricket-\(match.id)"
                                                 }
+                                            } label: {
+                                                CricketMatchCard(
+                                                    match: match,
+                                                    isSelected: activeSelectedMatchID == "cricket-\(match.id)"
+                                                )
                                             }
-                                        } label: {
-                                            CricketMatchCard(
-                                                match: match,
-                                                isSelected: activeSelectedMatchID == "cricket-\(match.id)"
-                                            )
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
+                                } else {
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.24)) {
+                                            showRecentResults = true
+                                        }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "clock.arrow.circlepath")
+                                                .font(.system(size: 10.5, weight: .semibold))
+                                            Text("Recent results (\(recentCompletedDisplayedMatches.count))")
+                                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                                .lineLimit(1)
+                                            Spacer(minLength: 4)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 9.5, weight: .semibold))
+                                        }
+                                        .foregroundColor(.white.opacity(0.66))
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .fill(Color.white.opacity(0.03))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                                .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.top, 4)
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.trailing, 2)
                         .padding(.bottom, 6)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
             .frame(maxHeight: .infinity)
 
             if enableDemoMode {
-                Divider()
                 demoShowcaseStrip
             }
-
-            Divider()
 
             HStack(spacing: 10) {
                 Button(action: refreshAction) {
                     Image(systemName: "arrow.clockwise")
                         .frame(width: 14, height: 14)
                 }
-                    .tint(turfGreen)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
                     .help("Refresh")
                 Button(action: clearPinnedAction) {
                     Image(systemName: "pin.slash")
                         .frame(width: 14, height: 14)
                 }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MatchaMiniControlButtonStyle())
                     .help("Clear Pin")
                 Spacer()
                 Button(action: openPreferencesAction) {
                     Image(systemName: "gearshape")
                         .frame(width: 14, height: 14)
                 }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MatchaMiniControlButtonStyle())
                     .help("Settings")
                 Button(action: quitAction) {
                     Image(systemName: "power")
                         .frame(width: 14, height: 14)
                 }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(MatchaMiniControlButtonStyle())
                     .help("Quit")
             }
             .font(.system(size: 12, weight: .semibold))
             .controlSize(.small)
         }
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.10), Color.black.opacity(0.17)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
-                )
-        )
-        .shadow(color: .black.opacity(0.08), radius: 9, y: 2)
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .matchaChromePanel()
+        .overlay(alignment: .bottomTrailing) {
+            WindowResizeHandle(window: menuWindow, minSize: menuMinSize, maxSize: menuMaxSize)
+                .padding(.trailing, 2)
+                .padding(.bottom, 2)
+        }
+        .onChange(of: visibilityFilter) { newValue in
+            if newValue == .live {
+                showRecentResults = false
+            }
+        }
     }
 
     private var demoShowcaseStrip: some View {
@@ -916,8 +1470,8 @@ struct MatchaDashboardView: View {
                     streamedBaseURL: streamedBaseURL,
                     preloadedWatchOptions: preloadedWatchOptionsByMatchID["cricket-\(match.id)"] ?? [],
                     enableDataFetch: enableDataFetch,
-                    onPin: {
-                        currentTitle = match.menubarText
+                    onPin: { pinnedTitle in
+                        currentTitle = pinnedTitle
                         currentGameID = "cricket:\(match.id)"
                         currentGameState = match.state.lowercased()
                     },
@@ -929,38 +1483,25 @@ struct MatchaDashboardView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.08), Color.black.opacity(0.14)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
-        )
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        .matchaChromePanel()
+        .overlay(alignment: .bottomTrailing) {
+            WindowResizeHandle(window: detailWindow, minSize: detailMinSize, maxSize: detailMaxSize)
+                .padding(.trailing, 2)
+                .padding(.bottom, 2)
+        }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "sportscourt.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
-                .padding(7)
+                .padding(6)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(
                             LinearGradient(
-                                colors: [turfGreen.opacity(0.24), turfGreen.opacity(0.10)],
+                                colors: [turfGreen.opacity(0.26), Color.white.opacity(0.06)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -969,7 +1510,7 @@ struct MatchaDashboardView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Matcha")
-                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
 
             Spacer()
@@ -986,20 +1527,9 @@ struct MatchaDashboardView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 26, height: 22)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(MatchaMiniControlButtonStyle())
             .controlSize(.small)
             .help(isSearchExpanded ? "Close Search" : "Search & Add Favorites")
-
-            HStack(spacing: 6) {
-                if liveMatchesCount > 0 {
-                    Text("\(liveMatchesCount) live")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundColor(.red.opacity(0.9))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2.5)
-                        .background(Capsule().fill(Color.red.opacity(0.10)))
-                }
-            }
         }
     }
 
@@ -1025,21 +1555,17 @@ struct MatchaDashboardView: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Color.white.opacity(0.045))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.black.opacity(0.10))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 0.7)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
                     )
             )
 
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("Search across matches and add favorites directly from results.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    Text("Search across matches, teams, and competitions.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
             } else {
                 if searchedMatches.isEmpty, searchedCatalogItems.isEmpty {
                     Text("No results")
@@ -1047,17 +1573,13 @@ struct MatchaDashboardView: View {
                         .foregroundColor(.secondary)
                 } else {
                     if !searchedMatches.isEmpty {
-                        Text("Matches")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(.secondary)
+                        MatchaSectionHeading(title: "Matches")
                         ForEach(searchedMatches) { unified in
                             searchMatchRow(unified)
                         }
                     }
                     if !searchedCatalogItems.isEmpty {
-                        Text("Favorites")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(.secondary)
+                        MatchaSectionHeading(title: "Favorites")
                             .padding(.top, searchedMatches.isEmpty ? 0 : 3)
                         ForEach(searchedCatalogItems) { item in
                             searchFavoriteRow(item)
@@ -1071,12 +1593,24 @@ struct MatchaDashboardView: View {
     }
 
     private var matchControls: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             HStack(spacing: 8) {
-                Label("\(displayedMatches.count) matches", systemImage: "line.3.horizontal.decrease")
-                    .font(.caption2)
+                Text(visibilityFilter == .live ? "Live now" : "\(visibleMatchCount) matches")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundColor(.secondary)
-                Spacer()
+                if visibilityFilter == .all, !showRecentResults, !recentCompletedDisplayedMatches.isEmpty {
+                    Text("\(recentCompletedDisplayedMatches.count) recent")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.70))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
+                        )
+                }
+                Spacer(minLength: 6)
                 Picker("", selection: $visibilityFilter) {
                     ForEach(MatchVisibilityFilter.allCases) { filter in
                         Text(filter.title).tag(filter)
@@ -1171,6 +1705,10 @@ struct MatchaDashboardView: View {
                     .lineLimit(1)
             }
             Spacer()
+            MatchaProviderBadge(
+                title: searchMatchSportLabel(unified),
+                tint: searchMatchSportTint(unified)
+            )
             if isFavoriteMatch(unified) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(turfGreen)
@@ -1182,7 +1720,7 @@ struct MatchaDashboardView: View {
                 } label: {
                     Image(systemName: "star.badge.plus")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(MatchaMiniControlButtonStyle())
                 .controlSize(.mini)
                 .help("Add teams and competition to favorites")
             }
@@ -1191,7 +1729,7 @@ struct MatchaDashboardView: View {
             } label: {
                 Image(systemName: "arrow.right.circle")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(MatchaMiniControlButtonStyle())
             .help("Open match details")
         }
         .matchaSubtleCard(corner: 8, fillOpacity: 0.02, strokeOpacity: 0.04)
@@ -1200,10 +1738,20 @@ struct MatchaDashboardView: View {
     @ViewBuilder
     private func searchFavoriteRow(_ item: FavoriteCatalogItem) -> some View {
         HStack(spacing: 8) {
-            Text(item.name)
-                .font(.caption)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Text(searchFavoriteSubtitle(item))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
             Spacer()
+            MatchaProviderBadge(
+                title: searchFavoriteSportLabel(item),
+                tint: searchFavoriteSportTint(item)
+            )
             Text(item.kind == .team ? "Team" : "Competition")
                 .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                 .foregroundColor(.secondary)
@@ -1217,7 +1765,7 @@ struct MatchaDashboardView: View {
                 } label: {
                     Image(systemName: "plus.circle")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(MatchaMiniControlButtonStyle())
                 .help("Add to favorites")
             }
         }
@@ -1256,13 +1804,59 @@ struct MatchaDashboardView: View {
 
     private func searchMatchSubtitle(_ unified: UnifiedMatch) -> String {
         if let soccer = unified.soccer {
-            return "\(soccer.leagueTitle) • \(formattedTime(from: soccer.game.date))"
+            return "Football • \(soccer.leagueTitle) • \(formattedTime(from: soccer.game.date))"
         }
         if let cricket = unified.cricket {
             let date = Date(timeIntervalSince1970: Double(cricket.startTimestamp) / 1000.0)
-            return "\(cricket.seriesName) • \(DashboardDateFormatters.cardDateTime.string(from: date))"
+            return "Cricket • \(cricket.seriesName) • \(DashboardDateFormatters.cardDateTime.string(from: date))"
         }
         return ""
+    }
+
+    private func searchMatchSportLabel(_ unified: UnifiedMatch) -> String {
+        if unified.soccer != nil {
+            return "Football"
+        }
+        if unified.cricket != nil {
+            return "Cricket"
+        }
+        return "Sport"
+    }
+
+    private func searchMatchSportTint(_ unified: UnifiedMatch) -> Color {
+        if unified.soccer != nil {
+            return Color(red: 0.20, green: 0.48, blue: 0.92)
+        }
+        if unified.cricket != nil {
+            return turfGreen
+        }
+        return Color.white.opacity(0.3)
+    }
+
+    private func searchFavoriteSubtitle(_ item: FavoriteCatalogItem) -> String {
+        let sport = searchFavoriteSportLabel(item)
+        if let country = item.country, !country.isEmpty {
+            return "\(sport) • \(country)"
+        }
+        return sport
+    }
+
+    private func searchFavoriteSportLabel(_ item: FavoriteCatalogItem) -> String {
+        switch item.sport {
+        case .soccer:
+            return "Football"
+        case .cricket:
+            return "Cricket"
+        }
+    }
+
+    private func searchFavoriteSportTint(_ item: FavoriteCatalogItem) -> Color {
+        switch item.sport {
+        case .soccer:
+            return Color(red: 0.20, green: 0.48, blue: 0.92)
+        case .cricket:
+            return turfGreen
+        }
     }
 
     private func favoritedIDs() -> Set<String> {
@@ -1315,6 +1909,26 @@ struct MatchaDashboardView: View {
         hasRestoredPersistedSelection = true
     }
 
+    private func refreshPinnedTitleIfNeeded() {
+        guard !currentGameID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        if currentGameID.hasPrefix("cricket:") {
+            let matchID = String(currentGameID.dropFirst("cricket:".count))
+            guard let liveMatch = effectiveCricketMatches.first(where: { $0.id == matchID }) else { return }
+            currentTitle = liveMatch.menubarText
+            currentGameState = liveMatch.state.lowercased()
+            return
+        }
+
+        for feed in effectiveSoccerFeeds {
+            if let game = feed.games.first(where: { $0.id == currentGameID }) {
+                currentTitle = displayText(for: game, league: feed.leagueCode)
+                currentGameState = game.status.type.state
+                return
+            }
+        }
+    }
+
     private func detailSelection(for unifiedID: String) -> MatchDetailSelection? {
         guard let unified = displayedMatches.first(where: { $0.id == unifiedID }) else { return nil }
         if let soccer = unified.soccer { return .soccer(soccer) }
@@ -1342,24 +1956,43 @@ struct MatchaDashboardView: View {
             return
         }
 
-        let targetIDs = Set(displayedMatches.filter(isLiveOrUpcoming).prefix(10).map(\.id))
+        let visibleLiveOrUpcoming = Array(displaySnapshot.visible.filter(isLiveOrUpcoming).prefix(6))
+        let targetIDs = Set(visibleLiveOrUpcoming.map(\.id))
         await MainActor.run {
             preloadedWatchOptionsByMatchID = preloadedWatchOptionsByMatchID.filter { targetIDs.contains($0.key) }
             watchPreloadInFlight = watchPreloadInFlight.intersection(targetIDs)
         }
 
-        for unified in displayedMatches.filter(isLiveOrUpcoming).prefix(10) {
-            if await MainActor.run(body: { preloadedWatchOptionsByMatchID[unified.id] != nil || watchPreloadInFlight.contains(unified.id) }) {
-                continue
+        let pendingMatches = await MainActor.run { () -> [UnifiedMatch] in
+            let pending = visibleLiveOrUpcoming.filter { unified in
+                preloadedWatchOptionsByMatchID[unified.id] == nil && !watchPreloadInFlight.contains(unified.id)
             }
-            await MainActor.run {
+            for unified in pending {
                 _ = watchPreloadInFlight.insert(unified.id)
             }
+            return pending
+        }
 
-            let resolved = await resolveWatchOptions(for: unified)
-            await MainActor.run {
-                preloadedWatchOptionsByMatchID[unified.id] = resolved
-                watchPreloadInFlight.remove(unified.id)
+        guard !pendingMatches.isEmpty else { return }
+
+        var resolvedPairs: [(String, [IPTVResolver.MatchResolution])] = []
+        await withTaskGroup(of: (String, [IPTVResolver.MatchResolution]).self) { group in
+            for unified in pendingMatches {
+                group.addTask {
+                    let resolved = await resolveWatchOptions(for: unified)
+                    return (unified.id, resolved)
+                }
+            }
+
+            for await pair in group {
+                resolvedPairs.append(pair)
+            }
+        }
+
+        await MainActor.run {
+            for (id, resolved) in resolvedPairs {
+                preloadedWatchOptionsByMatchID[id] = resolved
+                watchPreloadInFlight.remove(id)
             }
         }
     }
@@ -1405,6 +2038,14 @@ struct MatchaDashboardView: View {
         guard let query else { return [] }
 
         var merged: [IPTVResolver.MatchResolution] = []
+        if enableStreamedProvider {
+            let streamedMatches = await StreamedResolver.resolveMatchStreams(
+                query: query,
+                config: .init(enabled: true, baseURLString: streamedBaseURL),
+                limit: 6
+            )
+            merged.append(contentsOf: streamedMatches)
+        }
         if !m3u.isEmpty {
             let iptvMatches = await IPTVResolver.shared.resolveMatchStreams(
                 query: query,
@@ -1413,14 +2054,6 @@ struct MatchaDashboardView: View {
                 limit: 6
             )
             merged.append(contentsOf: iptvMatches)
-        }
-        if enableStreamedProvider {
-            let streamedMatches = await StreamedResolver.resolveMatchStreams(
-                query: query,
-                config: .init(enabled: true, baseURLString: streamedBaseURL),
-                limit: 6
-            )
-            merged.append(contentsOf: streamedMatches)
         }
         return dedupeMatchOptions(merged, limit: 8)
     }
@@ -1508,50 +2141,30 @@ private struct DetailPlaceholderView: View {
 }
 
 private extension View {
+    func matchaChromePanel(corner: CGFloat = 14) -> some View {
+        modifier(MatchaChromePanelModifier(corner: corner))
+    }
+
     func matchaSectionCard(corner: CGFloat = 9, fillOpacity: CGFloat = 0.46, strokeOpacity: CGFloat = 0.07) -> some View {
-        let normalizedFill = max(0.0, min(fillOpacity, 1.0))
-        return self
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: corner, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.04 + (0.06 * normalizedFill)),
-                                        Color.black.opacity(0.08 + (0.15 * normalizedFill)),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .stroke(Color.white.opacity(0.06 + strokeOpacity), lineWidth: 0.7)
-            )
+        modifier(MatchaSectionCardModifier(corner: corner, fillOpacity: fillOpacity, strokeOpacity: strokeOpacity))
     }
 
     func matchaSubtleCard(corner: CGFloat = 9, fillOpacity: CGFloat = 0.045, strokeOpacity: CGFloat = 0.06) -> some View {
-        let normalizedFill = max(0.0, min(fillOpacity, 1.0))
-        return self
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: corner, style: .continuous)
-                            .fill(Color.black.opacity(0.03 + normalizedFill))
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .stroke(Color.white.opacity(0.04 + strokeOpacity), lineWidth: 0.7)
-            )
+        modifier(MatchaSubtleCardModifier(corner: corner, fillOpacity: fillOpacity, strokeOpacity: strokeOpacity))
+    }
+}
+
+private enum MatchaImageCache {
+    private static let cache = NSCache<NSString, NSImage>()
+
+    static func image(for localURL: URL) -> NSImage? {
+        let key = localURL.path as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+        guard let image = NSImage(contentsOf: localURL) else { return nil }
+        cache.setObject(image, forKey: key)
+        return image
     }
 }
 
@@ -1577,18 +2190,15 @@ private struct SoccerMatchCard: View {
 
         VStack(alignment: .leading, spacing: compactMode ? 3 : 4) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.leagueTitle)
-                        .font(.system(size: 10.2, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.74))
-                        .lineLimit(1)
-                    Text(soccerDateLine(for: game))
-                        .font(.system(size: 10.1, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.64))
-                        .lineLimit(1)
-                }
-
+                Text(item.leagueTitle)
+                    .font(.system(size: 10.2, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.74))
+                    .lineLimit(1)
                 Spacer()
+                Text(soccerDateLine(for: game))
+                    .font(.system(size: 10.1, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.64))
+                    .lineLimit(1)
             }
 
             HStack(spacing: compactMode ? 10 : 11) {
@@ -1598,17 +2208,20 @@ private struct SoccerMatchCard: View {
                     alignment: .leading
                 )
 
-                VStack(spacing: 2) {
-                    Text(game.status.type.state == "in" ? "LIVE" : "VS")
+                VStack(spacing: 1.5) {
+                    Text(soccerCenterPrimary(for: game))
                         .font(.system(size: 9.8, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.76))
-                    if game.status.type.state == "pre" {
-                        Text(formattedTime(from: game.date))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    if let secondary = soccerCenterSecondary(for: game) {
+                        Text(secondary)
                             .font(.system(size: 9.8, weight: .medium, design: .rounded).monospacedDigit())
                             .foregroundColor(.white.opacity(0.60))
+                            .lineLimit(1)
                     }
                 }
-                .frame(width: 56)
+                .frame(width: 74)
 
                 soccerColumn(
                     team: home?.team,
@@ -1622,15 +2235,15 @@ private struct SoccerMatchCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             cardShape
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(Color(red: 0.10, green: 0.115, blue: 0.15).opacity(0.96))
                 .overlay(
                     LinearGradient(
                         colors: [
-                            awayPrimary.opacity(0.30),
-                            awaySecondary.opacity(0.12),
+                            awayPrimary.opacity(0.22),
+                            awaySecondary.opacity(0.08),
                             Color.clear,
-                            homeSecondary.opacity(0.12),
-                            homePrimary.opacity(0.25),
+                            homeSecondary.opacity(0.08),
+                            homePrimary.opacity(0.20),
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -1640,12 +2253,28 @@ private struct SoccerMatchCard: View {
                     cardShape
                         .fill(
                             LinearGradient(
-                                colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
+                                colors: [Color.white.opacity(0.04), Color.black.opacity(0.06)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                 )
+                .overlay(alignment: .leading) {
+                    Circle()
+                        .fill(awayPrimary.opacity(0.14))
+                        .frame(width: 112, height: 112)
+                        .blur(radius: 24)
+                        .offset(x: -22, y: -8)
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .trailing) {
+                    Circle()
+                        .fill(homePrimary.opacity(0.14))
+                        .frame(width: 112, height: 112)
+                        .blur(radius: 24)
+                        .offset(x: 22, y: -8)
+                        .allowsHitTesting(false)
+                }
         )
         .clipShape(cardShape)
         .overlay(
@@ -1653,8 +2282,6 @@ private struct SoccerMatchCard: View {
                 .strokeBorder(isSelected ? Color.accentColor.opacity(0.45) : Color.white.opacity(0.06), lineWidth: isSelected ? 1.0 : 0.6)
         )
         .shadow(color: .black.opacity(isSelected ? 0.09 : 0.03), radius: isSelected ? 3 : 1.6, y: 1)
-        .scaleEffect(isSelected ? 1.002 : 1)
-        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: isSelected)
     }
 
     private enum Side {
@@ -1741,17 +2368,57 @@ private struct SoccerMatchCard: View {
 
         if state == "in" {
             if !clock.isEmpty {
-                return "LIVE • \(clock)"
+                return "Live • \(clock)"
             }
-            return "LIVE • \(kickoff)"
+            return "Live"
         }
         if state == "pre" {
-            return "UPCOMING • \(kickoff)"
-        }
-        if state == "post" || game.status.type.completed {
-            return "FINAL • \(kickoff)"
+            return kickoff
         }
         return kickoff
+    }
+
+    private func soccerCenterPrimary(for game: Event) -> String {
+        let state = game.status.type.state.lowercased()
+        if state == "in" {
+            return game.status.displayClock?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? (game.status.displayClock ?? "Live")
+                : "Live"
+        }
+        if state == "pre" {
+            return "Upcoming"
+        }
+        if state == "post" || game.status.type.completed {
+            return cleanedSoccerResult(for: game)
+        }
+        return "Match"
+    }
+
+    private func soccerCenterSecondary(for game: Event) -> String? {
+        let state = game.status.type.state.lowercased()
+        if state == "in" {
+            let clock = game.status.displayClock?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return clock.isEmpty ? nil : "Live"
+        }
+        if state == "pre" {
+            return "Starts Soon"
+        }
+        if state == "post" || game.status.type.completed {
+            return "Final"
+        }
+        return nil
+    }
+
+    private func cleanedSoccerResult(for game: Event) -> String {
+        let raw = (game.status.type.shortDetail ?? game.status.type.detail ?? "")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return "Final" }
+
+        let cleaned = raw
+            .replacingOccurrences(of: #"^(?i)\s*(result|results|ft|full time)\s*([•:\-]\s*)?"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "Final" : cleaned
     }
 
     private func cardDateTime(fromISO iso: String) -> String {
@@ -1786,7 +2453,14 @@ private struct TeamLogo: View {
 
     var body: some View {
         Group {
-            if let resolvedURL {
+            if let resolvedURL, resolvedURL.isFileURL, let localImage = MatchaImageCache.image(for: resolvedURL) {
+                Image(nsImage: localImage)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(3.2)
+                    .background(Circle().fill(.white.opacity(0.97)))
+                    .frame(width: 19, height: 19)
+            } else if let resolvedURL {
                 AsyncImage(url: resolvedURL) { phase in
                     switch phase {
                     case let .success(image):
@@ -1910,6 +2584,144 @@ private struct StatusChip: View {
     }
 }
 
+private struct MatchaMiniControlButtonStyle: ButtonStyle {
+    var prominent = false
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func makeBody(configuration: Configuration) -> some View {
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
+        configuration.label
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundColor(prominent ? .white : .primary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(backgroundFill(for: mode, pressed: configuration.isPressed))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(borderColor(for: mode), lineWidth: 0.6)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+    }
+
+    private func backgroundFill(for mode: MatchaAppearanceMode, pressed: Bool) -> Color {
+        if prominent {
+            return Color.accentColor.opacity(pressed ? 0.62 : 0.80)
+        }
+
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(pressed ? 0.14 : 0.09)
+        case .frostedGlass:
+            return Color.white.opacity(pressed ? 0.10 : 0.07)
+        case .darkFrosted:
+            return Color.white.opacity(pressed ? 0.09 : 0.06)
+        }
+    }
+
+    private func borderColor(for mode: MatchaAppearanceMode) -> Color {
+        if prominent {
+            return Color.accentColor.opacity(0.30)
+        }
+
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.12)
+        case .frostedGlass:
+            return Color.white.opacity(0.10)
+        case .darkFrosted:
+            return Color.white.opacity(0.08)
+        }
+    }
+}
+
+private struct MatchaProviderBadge: View {
+    let title: String
+    let tint: Color
+
+    init(source: String) {
+        self.title = source == "streamed" ? "Streamed" : "IPTV"
+        self.tint = source == "streamed"
+            ? Color(red: 0.39, green: 0.58, blue: 0.98)
+            : Color(red: 0.24, green: 0.72, blue: 0.50)
+    }
+
+    init(title: String, tint: Color) {
+        self.title = title
+        self.tint = tint
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+            .foregroundColor(.white.opacity(0.78))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(0.16)))
+            .overlay(
+                Capsule()
+                    .stroke(tint.opacity(0.28), lineWidth: 0.5)
+            )
+    }
+}
+
+private struct MatchaSectionHeading: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundColor(.secondary.opacity(0.92))
+            .tracking(0.1)
+    }
+}
+
+private struct WindowResizeHandle: View {
+    weak var window: NSWindow?
+    let minSize: CGSize
+    let maxSize: CGSize
+
+    @State private var initialFrame: CGRect?
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundColor(.white.opacity(0.58))
+            .frame(width: 22, height: 22)
+            .background(Circle().fill(Color.black.opacity(0.16)))
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
+            )
+            .contentShape(Rectangle())
+            .help("Resize")
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard let window else { return }
+                        let startFrame = initialFrame ?? window.frame
+                        if initialFrame == nil {
+                            initialFrame = startFrame
+                        }
+
+                        let proposedWidth = min(max(startFrame.width + value.translation.width, minSize.width), maxSize.width)
+                        let proposedHeight = min(max(startFrame.height - value.translation.height, minSize.height), maxSize.height)
+                        let newOrigin = CGPoint(
+                            x: startFrame.origin.x,
+                            y: startFrame.maxY - proposedHeight
+                        )
+                        let newFrame = CGRect(origin: newOrigin, size: CGSize(width: proposedWidth, height: proposedHeight))
+                        window.setFrame(newFrame, display: true)
+                    }
+                    .onEnded { _ in
+                        initialFrame = nil
+                    }
+            )
+    }
+}
+
 private struct CricketMatchCard: View {
     let match: CricketMatch
     let isSelected: Bool
@@ -1986,15 +2798,15 @@ private struct CricketMatchCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             cardShape
-                .fill(.ultraThinMaterial)
+                .fill(Color(red: 0.10, green: 0.115, blue: 0.15).opacity(0.96))
                 .overlay(
                     LinearGradient(
                         colors: [
-                            leftPalette.primary.opacity(0.32),
-                            leftPalette.secondary.opacity(0.20),
+                            leftPalette.primary.opacity(0.22),
+                            leftPalette.secondary.opacity(0.10),
                             Color.clear,
-                            rightPalette.secondary.opacity(0.20),
-                            rightPalette.primary.opacity(0.32),
+                            rightPalette.secondary.opacity(0.10),
+                            rightPalette.primary.opacity(0.22),
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -2004,35 +2816,35 @@ private struct CricketMatchCard: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [leftPalette.primary.opacity(0.28), leftPalette.secondary.opacity(0.08)],
+                                colors: [leftPalette.primary.opacity(0.22), leftPalette.secondary.opacity(0.05)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 142, height: 142)
-                        .blur(radius: 16)
-                        .offset(x: -34, y: -14)
+                        .frame(width: 132, height: 132)
+                        .blur(radius: 22)
+                        .offset(x: -26, y: -10)
                         .allowsHitTesting(false)
                 }
                 .overlay(alignment: .trailing) {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [rightPalette.primary.opacity(0.28), rightPalette.secondary.opacity(0.08)],
+                                colors: [rightPalette.primary.opacity(0.22), rightPalette.secondary.opacity(0.05)],
                                 startPoint: .topTrailing,
                                 endPoint: .bottomLeading
                             )
                         )
-                        .frame(width: 142, height: 142)
-                        .blur(radius: 16)
-                        .offset(x: 34, y: -12)
+                        .frame(width: 132, height: 132)
+                        .blur(radius: 22)
+                        .offset(x: 26, y: -10)
                         .allowsHitTesting(false)
                 }
                 .overlay(
                     cardShape
                         .fill(
                             LinearGradient(
-                                colors: [Color.black.opacity(0.08), Color.black.opacity(0.02)],
+                                colors: [Color.white.opacity(0.04), Color.black.opacity(0.06)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -2045,8 +2857,6 @@ private struct CricketMatchCard: View {
                 .strokeBorder(isSelected ? Color.accentColor.opacity(0.45) : Color.white.opacity(0.06), lineWidth: isSelected ? 1.0 : 0.6)
         )
         .shadow(color: .black.opacity(isSelected ? 0.09 : 0.03), radius: isSelected ? 3 : 1.6, y: 1)
-        .scaleEffect(isSelected ? 1.002 : 1)
-        .animation(.spring(response: 0.22, dampingFraction: 0.9), value: isSelected)
     }
 
     @ViewBuilder
@@ -2139,7 +2949,12 @@ private struct CricketMatchCard: View {
     }
 
     private func cricketHeaderLeading(for match: CricketMatch) -> String {
-        if match.isLive { return "Live Now" }
+        if match.isLive {
+            if let liveContext = cleanedLiveContext(match) {
+                return liveContext
+            }
+            return "Live"
+        }
         if match.isUpcoming { return "Upcoming" }
         return resultLine(for: match)
     }
@@ -2164,15 +2979,66 @@ private struct CricketMatchCard: View {
     private func resultLine(for match: CricketMatch) -> String {
         if match.isLive { return "Live" }
         if match.isUpcoming { return "Starts Soon" }
-        let status = match.status.trimmingCharacters(in: .whitespacesAndNewlines)
+        let status = cleanedCompletedStatus(match.status)
         if !status.isEmpty { return status }
-        if isTournamentFinal(match) { return "Final" }
+        let detail = cleanedCompletedStatus(match.detail)
+        if detail.lowercased().contains("won by")
+            || detail.lowercased().contains("draw")
+            || detail.lowercased().contains("tied")
+        {
+            return detail
+        }
         return "Completed"
     }
 
     private func cardSubline(for match: CricketMatch) -> String? {
-        if match.isLive { return "Live" }
+        if match.isLive { return nil }
         if match.isUpcoming { return "Starts Soon" }
+        return nil
+    }
+
+    private func cleanedCompletedStatus(_ raw: String) -> String {
+        var value = raw
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return "" }
+
+        value = value
+            .replacingOccurrences(
+                of: #"^(?i)\s*(result|results|completed|complete)\s*([•:\-]\s*)?"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !value.isEmpty else { return "" }
+
+        let lowered = value.lowercased()
+        if lowered == "result" || lowered == "results" || lowered == "completed" || lowered == "complete" {
+            return ""
+        }
+        return value
+    }
+
+    private func cleanedLiveContext(_ match: CricketMatch) -> String? {
+        let candidates = [match.status, match.detail]
+        for raw in candidates {
+            let value = raw
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { continue }
+            let lowered = value.lowercased()
+            if lowered == "live"
+                || lowered == "in progress"
+                || lowered == "result"
+                || lowered.contains("opt to bowl")
+                || lowered.contains("opt to bat")
+                || lowered.contains("won the toss")
+            {
+                continue
+            }
+            return value
+        }
         return nil
     }
 
@@ -2233,7 +3099,17 @@ private struct CricketTeamBadge: View {
     }
 
     var body: some View {
-        if let source = resolvedLogoURL {
+        if let source = resolvedLogoURL, source.isFileURL, let localImage = MatchaImageCache.image(for: source) {
+            Image(nsImage: localImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 24, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(.white.opacity(0.30), lineWidth: 0.6)
+                )
+        } else if let source = resolvedLogoURL {
             AsyncImage(url: source) { phase in
                 switch phase {
                 case let .success(image):
@@ -2250,8 +3126,17 @@ private struct CricketTeamBadge: View {
                 RoundedRectangle(cornerRadius: 3)
                     .stroke(.white.opacity(0.30), lineWidth: 0.6)
             )
-        } else if let flag = resolvedFlagURL
-        {
+        } else if let flag = resolvedFlagURL, flag.isFileURL, let localImage = MatchaImageCache.image(for: flag) {
+            Image(nsImage: localImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 24, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(.white.opacity(0.35), lineWidth: 0.6)
+                )
+        } else if let flag = resolvedFlagURL {
             AsyncImage(url: flag) { phase in
                 switch phase {
                 case let .success(image):
@@ -2385,6 +3270,7 @@ private struct SoccerInlineDetailPane: View {
     @State private var inlineStreamURL: URL?
     @State private var inlineStreamHeaders: [String: String] = [:]
     @State private var inlinePreviewPreferWeb = false
+    @State private var didAutoStartLivePreview = false
     @State private var showBroadcastHints = false
 
     private var game: Event { item.game }
@@ -2413,7 +3299,7 @@ private struct SoccerInlineDetailPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(item.leagueTitle)
                     .font(.subheadline.weight(.semibold))
@@ -2443,12 +3329,14 @@ private struct SoccerInlineDetailPane: View {
                 Button(action: onPin) {
                     Label("Pin", systemImage: "pin")
                 }
+                .buttonStyle(MatchaMiniControlButtonStyle())
                 if let href = game.links?.first?.href, let url = URL(string: href) {
                     Button {
                         NSWorkspace.shared.open(url)
                     } label: {
                         Label("Center", systemImage: "arrow.up.right.square")
                     }
+                    .buttonStyle(MatchaMiniControlButtonStyle())
                 }
                 Spacer()
                 if loadingStandings {
@@ -2459,7 +3347,7 @@ private struct SoccerInlineDetailPane: View {
             .font(.caption)
             .controlSize(.small)
 
-            Picker("Section", selection: $selectedTab.animation(.easeInOut(duration: 0.2))) {
+            Picker("Section", selection: $selectedTab) {
                 Text("Overview").tag(SoccerDetailTab.overview)
                 Text("Broadcast").tag(SoccerDetailTab.broadcast)
                 Text("Standings").tag(SoccerDetailTab.standings)
@@ -2467,8 +3355,6 @@ private struct SoccerInlineDetailPane: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
-
-            Divider()
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 7) {
@@ -2482,20 +3368,34 @@ private struct SoccerInlineDetailPane: View {
                     }
                 }
             }
+            .padding(.top, 2)
         }
-        .padding(12)
+        .padding(13)
         .task {
             if enableDataFetch {
                 applyPreloadedWatchOptions()
                 async let standingsTask: Void = loadStandings()
                 async let watchTask: Void = preloadedWatchOptions.isEmpty ? resolveSmartWatch() : noOp()
                 _ = await (standingsTask, watchTask)
+                maybeAutoStartLivePreviewIfNeeded()
+            }
+        }
+        .task(id: "\(game.id)|\(game.status.type.state)|\(enableDataFetch)") {
+            guard enableDataFetch, isLiveOrUpcoming else { return }
+            while !Task.isCancelled {
+                let refreshNanos: UInt64 = game.status.type.state.lowercased() == "in"
+                    ? 30_000_000_000
+                    : 90_000_000_000
+                try? await Task.sleep(nanoseconds: refreshNanos)
+                if Task.isCancelled || !isLiveOrUpcoming { break }
+                await resolveSmartWatch()
+                maybeAutoStartLivePreviewIfNeeded()
             }
         }
     }
 
     private var overviewContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             let competition = game.competitions.first
             let teams = competition?.competitors ?? []
             let away = teams.count > 1 ? teams[1] : nil
@@ -2503,12 +3403,9 @@ private struct SoccerInlineDetailPane: View {
 
             whereToWatchOverviewCard
 
-            detailInfoCard(rows: [
-                ("Kickoff", cardDateTime(fromISO: game.date)),
-                ("Status", game.status.type.detail ?? game.status.type.shortDetail ?? "-"),
-                ("Venue", competition?.venue?.fullName ?? "Unknown"),
-                ("Weather", weatherLine),
-            ])
+            if !soccerOverviewInfoRows.isEmpty {
+                detailInfoCard(rows: soccerOverviewInfoRows)
+            }
 
             if let key = keyMatchNote, !key.isEmpty {
                 Text(key)
@@ -2526,18 +3423,20 @@ private struct SoccerInlineDetailPane: View {
     private var whereToWatchOverviewCard: some View {
         if isLiveOrUpcoming {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Where to Watch")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.secondary)
+                MatchaSectionHeading(title: "Where to Watch")
 
                 if loadingSmartWatch {
-                    ProgressView("Matching channel from EPG…")
+                    ProgressView("Finding stream…")
                         .font(.caption2)
                 } else if let smartWatch = selectedSmartWatch {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(smartWatch.channelName)
-                                .font(.caption.weight(.semibold))
+                            HStack(spacing: 6) {
+                                Text(smartWatch.channelName)
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                MatchaProviderBadge(source: smartWatch.matchedBy)
+                            }
                             if let program = smartWatch.programTitle, !program.isEmpty {
                                 Text(program)
                                     .font(.caption2)
@@ -2547,36 +3446,60 @@ private struct SoccerInlineDetailPane: View {
                         }
                         Spacer()
                         HStack(spacing: 6) {
-                            Button("Preview") {
+                            Button {
                                 inlineStreamURL = smartWatch.streamURL
                                 inlineStreamHeaders = smartWatch.requestHeaders
                                 inlinePreviewPreferWeb = smartWatch.matchedBy == "streamed"
+                            } label: {
+                                Image(systemName: "play.fill")
+                                    .frame(width: 24, height: 20)
                             }
-                            .font(.caption2)
-                            .buttonStyle(.borderedProminent)
-                            Button("Open") {
+                            .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
+                            .help("Preview")
+                            Button {
                                 NSWorkspace.shared.open(smartWatch.streamURL)
+                            } label: {
+                                Image(systemName: "arrow.up.right")
+                                    .frame(width: 24, height: 20)
                             }
-                            .font(.caption2)
-                            .buttonStyle(.bordered)
+                            .buttonStyle(MatchaMiniControlButtonStyle())
+                            .help("Open")
+                            Button {
+                                openDetachedStream(smartWatch, pinnedToCorner: false)
+                            } label: {
+                                Image(systemName: "pip")
+                                    .frame(width: 24, height: 20)
+                            }
+                            .buttonStyle(MatchaMiniControlButtonStyle())
+                            .help("PiP")
+                            Button {
+                                openDetachedStream(smartWatch, pinnedToCorner: true)
+                            } label: {
+                                Image(systemName: "pin.fill")
+                                    .frame(width: 24, height: 20)
+                            }
+                            .buttonStyle(MatchaMiniControlButtonStyle())
+                            .help("Pin to corner")
                         }
+                        .controlSize(.small)
                     }
                     .matchaSectionCard(fillOpacity: 0.48)
                     if smartWatchOptions.count > 1 {
-                        Picker("Channel", selection: $selectedSmartWatchKey) {
+                        Picker("Stream", selection: $selectedSmartWatchKey) {
                             ForEach(Array(smartWatchOptions.enumerated()), id: \.offset) { _, option in
-                                Text(option.channelName).tag("\(option.streamURL.absoluteString)|\(option.channelName)")
+                                Text("\(option.channelName) • \(option.matchedBy == "streamed" ? "Streamed" : "IPTV")")
+                                    .tag("\(option.streamURL.absoluteString)|\(option.channelName)")
                             }
                         }
                         .pickerStyle(.menu)
                         .font(.caption2)
                     }
                 } else if !hasAnyWatchProviderConfigured {
-                    Text("No stream provider configured. Add IPTV M3U/EPG or enable Streamed in Settings → Streaming.")
+                    Text("Add a stream provider in Settings to surface channels here.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 } else {
-                    Text("No channel match found in current EPG window.")
+                    Text("No stream match right now.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -2588,19 +3511,23 @@ private struct SoccerInlineDetailPane: View {
     private var broadcastContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !isLiveOrUpcoming {
-                Text("Where to Watch is available for live and upcoming fixtures.")
+                Text("Streams appear here for live and upcoming fixtures.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else {
                 if loadingSmartWatch {
-                    ProgressView("Matching channel from EPG…")
+                    ProgressView("Finding stream…")
                         .font(.caption2)
                 } else if let smartWatch = selectedSmartWatch {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(smartWatch.channelName)
-                                    .font(.caption.weight(.semibold))
+                                HStack(spacing: 6) {
+                                    Text(smartWatch.channelName)
+                                        .font(.caption.weight(.semibold))
+                                        .lineLimit(1)
+                                    MatchaProviderBadge(source: smartWatch.matchedBy)
+                                }
                                 if let program = smartWatch.programTitle, !program.isEmpty {
                                     Text(program)
                                         .font(.caption2)
@@ -2609,21 +3536,35 @@ private struct SoccerInlineDetailPane: View {
                                 }
                             }
                             Spacer()
-                            Button("Play") {
-                                NSWorkspace.shared.open(smartWatch.streamURL)
+                            HStack(spacing: 6) {
+                                Button {
+                                    inlineStreamURL = smartWatch.streamURL
+                                    inlineStreamHeaders = smartWatch.requestHeaders
+                                    inlinePreviewPreferWeb = smartWatch.matchedBy == "streamed"
+                                } label: {
+                                    Image(systemName: "play.fill")
+                                        .frame(width: 24, height: 20)
+                                }
+                                .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
+                                .help("Preview")
+
+                                Button {
+                                    NSWorkspace.shared.open(smartWatch.streamURL)
+                                } label: {
+                                    Image(systemName: "arrow.up.right")
+                                        .frame(width: 24, height: 20)
+                                }
+                                .buttonStyle(MatchaMiniControlButtonStyle())
+                                .help("Open")
                             }
-                            .font(.caption)
-                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
                         }
-                        .padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(.ultraThinMaterial.opacity(0.56))
-                        )
+                        .matchaSectionCard(fillOpacity: 0.48)
                         if smartWatchOptions.count > 1 {
-                            Picker("Channel", selection: $selectedSmartWatchKey) {
+                            Picker("Stream", selection: $selectedSmartWatchKey) {
                                 ForEach(Array(smartWatchOptions.enumerated()), id: \.offset) { _, option in
-                                    Text(option.channelName).tag("\(option.streamURL.absoluteString)|\(option.channelName)")
+                                    Text("\(option.channelName) • \(option.matchedBy == "streamed" ? "Streamed" : "IPTV")")
+                                        .tag("\(option.streamURL.absoluteString)|\(option.channelName)")
                                 }
                             }
                             .pickerStyle(.menu)
@@ -2631,11 +3572,11 @@ private struct SoccerInlineDetailPane: View {
                         }
                     }
                 } else if !hasAnyWatchProviderConfigured {
-                    Text("No stream provider configured. Add IPTV M3U/EPG or enable Streamed in Settings → Streaming.")
+                    Text("Add a stream provider in Settings to surface channels here.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 } else {
-                    Text("No channel/stream match found for current providers.")
+                    Text("No stream match right now.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -2674,7 +3615,7 @@ private struct SoccerInlineDetailPane: View {
                             .foregroundColor(.secondary)
                     }
                 } else {
-                    Text("No broadcast hints from fixture feed. Smart matching uses EPG title/time.")
+                    Text("No broadcast hints from the fixture feed.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -2721,6 +3662,14 @@ private struct SoccerInlineDetailPane: View {
         )
 
         var merged: [IPTVResolver.MatchResolution] = []
+        if enableStreamedProvider {
+            let streamedMatches = await StreamedResolver.resolveMatchStreams(
+                query: query,
+                config: .init(enabled: true, baseURLString: streamedBaseURL),
+                limit: 6
+            )
+            merged.append(contentsOf: streamedMatches)
+        }
         if !m3u.isEmpty {
             let iptvMatches = await IPTVResolver.shared.resolveMatchStreams(
                 query: query,
@@ -2730,25 +3679,57 @@ private struct SoccerInlineDetailPane: View {
             )
             merged.append(contentsOf: iptvMatches)
         }
-        if enableStreamedProvider {
-            let streamedMatches = await StreamedResolver.resolveMatchStreams(
-                query: query,
-                config: .init(enabled: true, baseURLString: streamedBaseURL),
-                limit: 6
-            )
-            merged.append(contentsOf: streamedMatches)
-        }
         let matches = dedupeMatchOptions(merged, limit: 8)
         smartWatchOptions = matches
-        smartWatch = matches.first
-        selectedSmartWatchKey = matches.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        if let preserved = matches.first(where: { "\($0.streamURL.absoluteString)|\($0.channelName)" == selectedSmartWatchKey }) {
+            smartWatch = preserved
+        } else {
+            smartWatch = matches.first
+            selectedSmartWatchKey = matches.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        }
     }
 
     private func applyPreloadedWatchOptions() {
         guard !preloadedWatchOptions.isEmpty else { return }
         smartWatchOptions = preloadedWatchOptions
-        smartWatch = preloadedWatchOptions.first
-        selectedSmartWatchKey = preloadedWatchOptions.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        if let preserved = preloadedWatchOptions.first(where: { "\($0.streamURL.absoluteString)|\($0.channelName)" == selectedSmartWatchKey }) {
+            smartWatch = preserved
+        } else {
+            smartWatch = preloadedWatchOptions.first
+            selectedSmartWatchKey = preloadedWatchOptions.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        }
+    }
+
+    private func maybeAutoStartLivePreviewIfNeeded() {
+        guard game.status.type.state.lowercased() == "in", !didAutoStartLivePreview else { return }
+        guard let preferred = preferredLiveAutoStartOption(from: smartWatchOptions) else { return }
+
+        selectedSmartWatchKey = "\(preferred.streamURL.absoluteString)|\(preferred.channelName)"
+        inlineStreamURL = preferred.streamURL
+        inlineStreamHeaders = preferred.requestHeaders
+        inlinePreviewPreferWeb = preferred.matchedBy == "streamed"
+        didAutoStartLivePreview = true
+    }
+
+    private func preferredLiveAutoStartOption(from options: [IPTVResolver.MatchResolution]) -> IPTVResolver.MatchResolution? {
+        let streamed = options.filter { $0.matchedBy == "streamed" }
+        if let sourceOne = streamed.first(where: { option in
+            option.channelName.localizedCaseInsensitiveContains("#1")
+                || option.channelName.localizedCaseInsensitiveContains("stream 1")
+        }) {
+            return sourceOne
+        }
+        return streamed.first ?? options.first
+    }
+
+    private func openDetachedStream(_ option: IPTVResolver.MatchResolution, pinnedToCorner: Bool) {
+        StreamPreviewWindowManager.shared.open(
+            title: option.channelName,
+            streamURL: option.streamURL,
+            requestHeaders: option.requestHeaders,
+            preferWebPreview: option.matchedBy == "streamed",
+            pinnedToCorner: pinnedToCorner
+        )
     }
 
     private func noOp() async {}
@@ -2832,6 +3813,47 @@ private struct SoccerInlineDetailPane: View {
         }
     }
 
+    private var soccerOverviewInfoRows: [(String, String)] {
+        let competition = game.competitions.first
+        var rows: [(String, String)] = [("Kickoff", cardDateTime(fromISO: game.date))]
+
+        if let status = cleanedSoccerStatusSummary(),
+           !status.isEmpty {
+            rows.append((isLiveOrUpcoming ? "Status" : "Result", status))
+        }
+
+        if let venue = competition?.venue?.fullName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !venue.isEmpty,
+           venue.lowercased() != "unknown" {
+            rows.append(("Venue", venue))
+        }
+
+        if let weather = weatherLine {
+            rows.append(("Weather", weather))
+        }
+
+        if rows.count > 4 {
+            return Array(rows.prefix(4))
+        }
+        return rows
+    }
+
+    private func cleanedSoccerStatusSummary() -> String? {
+        let raw = (game.status.type.detail ?? game.status.type.shortDetail ?? "")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+
+        let cleaned = raw
+            .replacingOccurrences(of: #"^(?i)\s*(result|results|ft|full time)\s*([•:\-]\s*)?"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if cleaned.isEmpty || cleaned == "—" || cleaned == "-" {
+            return nil
+        }
+        return cleaned
+    }
+
     @ViewBuilder
     private func soccerTeamRow(team: Team?, score: String?) -> some View {
         HStack(spacing: 8) {
@@ -2859,14 +3881,14 @@ private struct SoccerInlineDetailPane: View {
         standingsRows = standings.rows
     }
 
-    private var weatherLine: String {
+    private var weatherLine: String? {
         if let desc = game.weather?.displayValue, !desc.isEmpty {
             if let temp = game.weather?.temperature {
                 return "\(temp)° • \(desc)"
             }
             return desc
         }
-        return "—"
+        return nil
     }
 
     private var keyMatchNote: String? {
@@ -2917,7 +3939,7 @@ private struct CricketInlineDetailPane: View {
     let streamedBaseURL: String
     let preloadedWatchOptions: [IPTVResolver.MatchResolution]
     let enableDataFetch: Bool
-    let onPin: () -> Void
+    let onPin: (String) -> Void
     let onClose: () -> Void
 
     @State private var scorecardSummary: CricketScorecardSummary?
@@ -2936,6 +3958,7 @@ private struct CricketInlineDetailPane: View {
     @State private var inlineStreamURL: URL?
     @State private var inlineStreamHeaders: [String: String] = [:]
     @State private var inlinePreviewPreferWeb = false
+    @State private var didAutoStartLivePreview = false
     private static let allStandingsGroupsID = "__all_groups__"
 
     private var allStandingsGroup: CricketStandingGroup? {
@@ -3059,18 +4082,18 @@ private struct CricketInlineDetailPane: View {
 
             HStack(spacing: 8) {
                 Button {
-                    onPin()
+                    onPin(compactPinnedTitle())
                 } label: {
                     Label("Pin", systemImage: "pin")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(MatchaMiniControlButtonStyle())
 
                 Button {
                     NSWorkspace.shared.open(match.url)
                 } label: {
                     Label("Open Center", systemImage: "arrow.up.right.square")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(MatchaMiniControlButtonStyle())
 
                 Spacer()
                 if loadingScorecard || loadingStandings {
@@ -3081,7 +4104,7 @@ private struct CricketInlineDetailPane: View {
             .font(.caption2)
             .controlSize(.small)
 
-            Picker("Section", selection: $selectedTab.animation(.easeInOut(duration: 0.2))) {
+            Picker("Section", selection: $selectedTab) {
                 Text("Overview").tag(CricketDetailTab.overview)
                 Text("Scorecard").tag(CricketDetailTab.scorecard)
                 Text("Standings").tag(CricketDetailTab.standings)
@@ -3102,14 +4125,16 @@ private struct CricketInlineDetailPane: View {
                     }
                 }
             }
+            .padding(.top, 2)
         }
-        .padding(11)
+        .padding(13)
         .task(id: match.id) {
             if enableDataFetch {
                 applyPreloadedWatchOptions()
                 if preloadedWatchOptions.isEmpty {
                     await resolveSmartWatch()
                 }
+                maybeAutoStartLivePreviewIfNeeded()
                 if match.isUpcoming {
                     scorecardSummary = nil
                     standingsTable = nil
@@ -3122,6 +4147,19 @@ private struct CricketInlineDetailPane: View {
                 await loadScorecardSummary()
             }
         }
+        .task(id: "\(match.id)|\(match.state)|\(match.status)|\(enableDataFetch)") {
+            guard enableDataFetch, (match.isLive || match.isUpcoming) else { return }
+            while !Task.isCancelled {
+                let refreshNanos: UInt64 = match.isLive ? 30_000_000_000 : 120_000_000_000
+                try? await Task.sleep(nanoseconds: refreshNanos)
+                if Task.isCancelled || (!match.isLive && !match.isUpcoming) { break }
+                await resolveSmartWatch()
+                maybeAutoStartLivePreviewIfNeeded()
+                if match.isLive, !loadingScorecard {
+                    await loadScorecardSummary()
+                }
+            }
+        }
     }
 
     private var overviewContent: some View {
@@ -3130,20 +4168,13 @@ private struct CricketInlineDetailPane: View {
             overviewScoreSummaryCard
             overviewTopHighlightsBlock
 
-            detailInfoCard(rows: [
-                ("Result", !match.status.isEmpty ? match.status : (match.detail.isEmpty ? "-" : match.detail)),
-                ("Start", cardDateTime(fromUnixMs: match.startTimestamp)),
-                ("Toss", scorecardSummary?.toss ?? "-"),
-                ("Venue", scorecardSummary?.venue ?? "-"),
-                ("Fixture", match.matchDesc.isEmpty ? "-" : match.matchDesc),
-                ("POTM", playerHighlightValue ?? "-")
-            ])
+            if !overviewInfoRows.isEmpty {
+                detailInfoCard(rows: overviewInfoRows)
+            }
 
             if let standingsGroup = selectedStandingsGroup, !standingsGroup.rows.isEmpty {
                 Divider()
-                Text("Standings Snapshot")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                MatchaSectionHeading(title: "Standings Snapshot")
 
                 VStack(spacing: 4) {
                     ForEach(Array(standingsGroup.rows.prefix(4)), id: \.id) { row in
@@ -3170,28 +4201,25 @@ private struct CricketInlineDetailPane: View {
                     }
                 }
                 .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial.opacity(0.48))
-                )
+                .matchaSectionCard(corner: 10, fillOpacity: 0.34, strokeOpacity: 0.08)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Quick Totals")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                if !match.team1Innings.isEmpty || !match.team2Innings.isEmpty {
-                    quickInningsLine(title: match.team1Short, innings: match.team1Innings)
-                    quickInningsLine(title: match.team2Short, innings: match.team2Innings)
-                } else {
-                    Text("Innings totals will appear once feed data is available.")
+            if !match.isUpcoming {
+                VStack(alignment: .leading, spacing: 5) {
+                    MatchaSectionHeading(title: "Quick Totals")
+                    if !match.team1Innings.isEmpty || !match.team2Innings.isEmpty {
+                        quickInningsLine(title: match.team1Short, innings: match.team1Innings)
+                        quickInningsLine(title: match.team2Short, innings: match.team2Innings)
+                    } else {
+                        Text("Innings totals will appear once feed data is available.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("Open the Scorecard tab for full batter, bowler, and fall-of-wickets details.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                        .padding(.top, 2)
                 }
-                Text("Open the Scorecard tab for full batter, bowler, and fall-of-wickets details.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 2)
             }
         }
     }
@@ -3199,22 +4227,24 @@ private struct CricketInlineDetailPane: View {
     @ViewBuilder
     private var whereToWatchCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Where to Watch")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            MatchaSectionHeading(title: "Where to Watch")
 
             if !isLiveOrUpcoming {
-                Text("Available for live and upcoming fixtures.")
+                Text("Streams appear here for live and upcoming fixtures.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else if loadingSmartWatch {
-                ProgressView("Matching channel from EPG…")
+                ProgressView("Finding stream…")
                     .font(.caption2)
             } else if let smartWatch = selectedSmartWatch {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(smartWatch.channelName)
-                            .font(.caption.weight(.semibold))
+                        HStack(spacing: 6) {
+                            Text(smartWatch.channelName)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                            MatchaProviderBadge(source: smartWatch.matchedBy)
+                        }
                         if let program = smartWatch.programTitle, !program.isEmpty {
                             Text(program)
                                 .font(.caption2)
@@ -3224,25 +4254,49 @@ private struct CricketInlineDetailPane: View {
                     }
                     Spacer()
                     HStack(spacing: 6) {
-                        Button("Preview") {
+                        Button {
                             inlineStreamURL = smartWatch.streamURL
                             inlineStreamHeaders = smartWatch.requestHeaders
                             inlinePreviewPreferWeb = smartWatch.matchedBy == "streamed"
+                        } label: {
+                            Image(systemName: "play.fill")
+                                .frame(width: 24, height: 20)
                         }
-                        .font(.caption2)
-                        .buttonStyle(.borderedProminent)
-                        Button("Open") {
+                        .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
+                        .help("Preview")
+                        Button {
                             NSWorkspace.shared.open(smartWatch.streamURL)
+                        } label: {
+                            Image(systemName: "arrow.up.right")
+                                .frame(width: 24, height: 20)
                         }
-                        .font(.caption2)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(MatchaMiniControlButtonStyle())
+                        .help("Open")
+                        Button {
+                            openDetachedStream(smartWatch, pinnedToCorner: false)
+                        } label: {
+                            Image(systemName: "pip")
+                                .frame(width: 24, height: 20)
+                        }
+                        .buttonStyle(MatchaMiniControlButtonStyle())
+                        .help("PiP")
+                        Button {
+                            openDetachedStream(smartWatch, pinnedToCorner: true)
+                        } label: {
+                            Image(systemName: "pin.fill")
+                                .frame(width: 24, height: 20)
+                        }
+                        .buttonStyle(MatchaMiniControlButtonStyle())
+                        .help("Pin to corner")
                     }
+                    .controlSize(.small)
                 }
                 .matchaSectionCard(fillOpacity: 0.48)
                 if smartWatchOptions.count > 1 {
-                    Picker("Channel", selection: $selectedSmartWatchKey) {
+                    Picker("Stream", selection: $selectedSmartWatchKey) {
                         ForEach(Array(smartWatchOptions.enumerated()), id: \.offset) { _, option in
-                            Text(option.channelName).tag("\(option.streamURL.absoluteString)|\(option.channelName)")
+                            Text("\(option.channelName) • \(option.matchedBy == "streamed" ? "Streamed" : "IPTV")")
+                                .tag("\(option.streamURL.absoluteString)|\(option.channelName)")
                         }
                     }
                     .pickerStyle(.menu)
@@ -3251,9 +4305,9 @@ private struct CricketInlineDetailPane: View {
             } else {
                 Group {
                     if !hasAnyWatchProviderConfigured {
-                        Text("No stream provider configured. Add IPTV M3U/EPG or enable Streamed in Settings → Streaming.")
+                        Text("Add a stream provider in Settings to surface channels here.")
                     } else {
-                        Text("No channel/stream match found for current providers.")
+                        Text("No stream match right now.")
                     }
                 }
                     .font(.caption2)
@@ -3374,13 +4428,13 @@ private struct CricketInlineDetailPane: View {
                 )
 
                 VStack(spacing: 4) {
-                    Text(result.isEmpty ? (match.isLive ? "Live" : (match.isUpcoming ? "Upcoming" : "Result")) : result)
+                    Text(overviewCenterPrimaryLine(fixture: fixture))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
 
-                    Text(fixture.isEmpty ? "Match" : fixture)
+                    Text(overviewCenterSecondaryLine(result: result))
                         .font(.system(size: 11.5, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -3399,6 +4453,25 @@ private struct CricketInlineDetailPane: View {
             }
         }
         .matchaSectionCard(corner: 12, fillOpacity: 0.58, strokeOpacity: 0.10)
+    }
+
+    private func overviewCenterPrimaryLine(fixture: String) -> String {
+        if !fixture.isEmpty { return fixture }
+        if match.isLive { return "Live Match" }
+        if match.isUpcoming { return "Upcoming" }
+        return "Match"
+    }
+
+    private func overviewCenterSecondaryLine(result: String) -> String {
+        if !result.isEmpty { return result }
+        if match.isLive {
+            let liveSummary = cleanedOverviewResult(match.status)
+            if !liveSummary.isEmpty {
+                return liveSummary
+            }
+        }
+        if match.isUpcoming { return "Starts Soon" }
+        return matchDayLine
     }
 
     @ViewBuilder
@@ -3544,9 +4617,7 @@ private struct CricketInlineDetailPane: View {
 
     private var scorecardContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Scorecard")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            MatchaSectionHeading(title: "Scorecard")
 
             if match.isUpcoming {
                 Text("Detailed scorecard will appear once the match starts.")
@@ -3595,9 +4666,7 @@ private struct CricketInlineDetailPane: View {
     private var standingsContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Series Standings")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                MatchaSectionHeading(title: "Series Standings")
                 Spacer()
                 if loadingStandings {
                     ProgressView()
@@ -3610,7 +4679,7 @@ private struct CricketInlineDetailPane: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else if standingsPickerGroups.count > 1 {
-                Picker("Group", selection: $selectedStandingsGroupID.animation(.easeInOut(duration: 0.2))) {
+                Picker("Group", selection: $selectedStandingsGroupID) {
                     ForEach(standingsPickerGroups) { group in
                         Text(group.name).tag(group.id)
                     }
@@ -3678,14 +4747,9 @@ private struct CricketInlineDetailPane: View {
         .padding(.horizontal, 6)
         .font(.caption2.monospacedDigit())
         .background(
-            Rectangle()
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(index.isMultiple(of: 2) ? Color.white.opacity(0.016) : Color.clear)
         )
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.05))
-                .frame(height: 0.5)
-        }
     }
 
     @ViewBuilder
@@ -3729,8 +4793,8 @@ private struct CricketInlineDetailPane: View {
     @ViewBuilder
     private func inningsPerformanceCard(_ innings: CricketInningsBreakdown) -> some View {
         let isExpanded = expandedInnings.contains(innings.inningsNumber)
-        let displayedBatters = isExpanded ? innings.batters : Array(innings.batters.prefix(8))
-        let displayedBowlers = isExpanded ? innings.bowlers : Array(innings.bowlers.prefix(6))
+        let displayedBatters = isExpanded ? innings.batters : Array(innings.batters.prefix(6))
+        let displayedBowlers = isExpanded ? innings.bowlers : Array(innings.bowlers.prefix(5))
 
         VStack(alignment: .leading, spacing: 7) {
             HStack {
@@ -3987,6 +5051,14 @@ private struct CricketInlineDetailPane: View {
         )
 
         var merged: [IPTVResolver.MatchResolution] = []
+        if enableStreamedProvider {
+            let streamedMatches = await StreamedResolver.resolveMatchStreams(
+                query: query,
+                config: .init(enabled: true, baseURLString: streamedBaseURL),
+                limit: 6
+            )
+            merged.append(contentsOf: streamedMatches)
+        }
         if !m3u.isEmpty {
             let iptvMatches = await IPTVResolver.shared.resolveMatchStreams(
                 query: query,
@@ -3998,25 +5070,108 @@ private struct CricketInlineDetailPane: View {
             )
             merged.append(contentsOf: iptvMatches)
         }
-        if enableStreamedProvider {
-            let streamedMatches = await StreamedResolver.resolveMatchStreams(
-                query: query,
-                config: .init(enabled: true, baseURLString: streamedBaseURL),
-                limit: 6
-            )
-            merged.append(contentsOf: streamedMatches)
-        }
         let matches = dedupeMatchOptions(merged, limit: 8)
         smartWatchOptions = matches
-        smartWatch = matches.first
-        selectedSmartWatchKey = matches.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        if let preserved = matches.first(where: { "\($0.streamURL.absoluteString)|\($0.channelName)" == selectedSmartWatchKey }) {
+            smartWatch = preserved
+        } else {
+            smartWatch = matches.first
+            selectedSmartWatchKey = matches.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        }
     }
 
     private func applyPreloadedWatchOptions() {
         guard !preloadedWatchOptions.isEmpty else { return }
         smartWatchOptions = preloadedWatchOptions
-        smartWatch = preloadedWatchOptions.first
-        selectedSmartWatchKey = preloadedWatchOptions.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        if let preserved = preloadedWatchOptions.first(where: { "\($0.streamURL.absoluteString)|\($0.channelName)" == selectedSmartWatchKey }) {
+            smartWatch = preserved
+        } else {
+            smartWatch = preloadedWatchOptions.first
+            selectedSmartWatchKey = preloadedWatchOptions.first.map { "\($0.streamURL.absoluteString)|\($0.channelName)" } ?? ""
+        }
+    }
+
+    private func maybeAutoStartLivePreviewIfNeeded() {
+        guard match.isLive, !didAutoStartLivePreview else { return }
+        guard let preferred = preferredLiveAutoStartOption(from: smartWatchOptions) else { return }
+
+        selectedSmartWatchKey = "\(preferred.streamURL.absoluteString)|\(preferred.channelName)"
+        inlineStreamURL = preferred.streamURL
+        inlineStreamHeaders = preferred.requestHeaders
+        inlinePreviewPreferWeb = preferred.matchedBy == "streamed"
+        didAutoStartLivePreview = true
+    }
+
+    private func preferredLiveAutoStartOption(from options: [IPTVResolver.MatchResolution]) -> IPTVResolver.MatchResolution? {
+        let streamed = options.filter { $0.matchedBy == "streamed" }
+        if let sourceOne = streamed.first(where: { option in
+            option.channelName.localizedCaseInsensitiveContains("#1")
+                || option.channelName.localizedCaseInsensitiveContains("stream 1")
+        }) {
+            return sourceOne
+        }
+        return streamed.first ?? options.first
+    }
+
+    private func compactPinnedTitle() -> String {
+        if match.isLive {
+            var parts: [String] = [match.scoreLine]
+            if let ticker = liveTickerLine(), !ticker.isEmpty {
+                parts.append(ticker)
+            } else if let context = match.conciseLiveContext {
+                parts.append(context)
+            }
+            return parts.joined(separator: " • ")
+        }
+
+        if match.isUpcoming {
+            let fixture = cleanedOverviewFixture(match.matchDesc)
+            if fixture.isEmpty {
+                return "\(match.team1Short) vs \(match.team2Short)"
+            }
+            return "\(match.team1Short) vs \(match.team2Short) • \(fixture)"
+        }
+
+        let result = cleanedOverviewResult(match.status)
+        if result.isEmpty {
+            return match.scoreLine
+        }
+        return "\(match.scoreLine) • \(result)"
+    }
+
+    private func liveTickerLine() -> String? {
+        guard let innings = scorecardSummary?.innings.last else { return nil }
+        let activeBatters = innings.batters.filter { batter in
+            let out = batter.outDescription.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return out.isEmpty || out.contains("not out")
+        }
+        let keyBatter = activeBatters.max(by: { $0.runs < $1.runs }) ?? innings.batters.max(by: { $0.runs < $1.runs })
+        let lastPartnership = innings.partnerships.last
+
+        var bits: [String] = []
+        if let keyBatter {
+            bits.append("Bat: \(shortPlayerName(keyBatter.name)) \(keyBatter.runs)(\(keyBatter.balls))")
+        }
+        if let lastPartnership, lastPartnership.runs > 0 {
+            bits.append("Part: \(lastPartnership.runs)(\(lastPartnership.balls))")
+        }
+        return bits.isEmpty ? nil : bits.joined(separator: " • ")
+    }
+
+    private func shortPlayerName(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        guard let last = parts.last else { return name }
+        return String(last)
+    }
+
+    private func openDetachedStream(_ option: IPTVResolver.MatchResolution, pinnedToCorner: Bool) {
+        StreamPreviewWindowManager.shared.open(
+            title: option.channelName,
+            streamURL: option.streamURL,
+            requestHeaders: option.requestHeaders,
+            preferWebPreview: option.matchedBy == "streamed",
+            pinnedToCorner: pinnedToCorner
+        )
     }
 
     private func dedupeMatchOptions(_ options: [IPTVResolver.MatchResolution], limit: Int) -> [IPTVResolver.MatchResolution] {
@@ -4035,6 +5190,45 @@ private struct CricketInlineDetailPane: View {
     private func cardDateTime(fromUnixMs value: Int64) -> String {
         let date = Date(timeIntervalSince1970: Double(value) / 1000.0)
         return DashboardDateFormatters.cardDateTime.string(from: date)
+    }
+
+    private var overviewInfoRows: [(String, String)] {
+        var rows: [(String, String)] = []
+
+        let result = cleanedOverviewResult(match.status)
+        if !result.isEmpty {
+            rows.append(("Result", result))
+        }
+
+        rows.append(("Start", cardDateTime(fromUnixMs: match.startTimestamp)))
+
+        if let toss = normalizedInfoValue(scorecardSummary?.toss) {
+            rows.append(("Toss", toss))
+        }
+        if let venue = normalizedInfoValue(scorecardSummary?.venue) {
+            rows.append(("Venue", venue))
+        }
+
+        let fixture = cleanedOverviewFixture(match.matchDesc)
+        if !fixture.isEmpty {
+            rows.append(("Fixture", fixture))
+        }
+
+        if let potm = normalizedInfoValue(playerHighlightValue) {
+            rows.append(("POTM", potm))
+        }
+
+        if rows.count > 5 {
+            return Array(rows.prefix(5))
+        }
+        return rows
+    }
+
+    private func normalizedInfoValue(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "-" { return nil }
+        return trimmed
     }
 
     private func shortName(for row: CricketStandingRow) -> String {
@@ -4080,10 +5274,138 @@ private struct CricketInlineDetailPane: View {
     }
 }
 
+@MainActor
+private final class StreamPreviewWindowManager {
+    static let shared = StreamPreviewWindowManager()
+    private var pinnedWindow: NSWindow?
+    private var popoutWindow: NSWindow?
+
+    func open(
+        title: String,
+        streamURL: URL,
+        requestHeaders: [String: String],
+        preferWebPreview: Bool,
+        pinnedToCorner: Bool
+    ) {
+        let target = pinnedToCorner ? pinnedWindow : popoutWindow
+        if let target {
+            target.contentViewController = NSHostingController(
+                rootView: DetachedStreamWindowContent(
+                    title: title,
+                    streamURL: streamURL,
+                    requestHeaders: requestHeaders,
+                    preferWebPreview: preferWebPreview,
+                    onClose: { target.close() }
+                )
+            )
+            if pinnedToCorner { placeInTopRightCorner(window: target) }
+            target.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let window = NSWindow(contentViewController: NSViewController())
+        let chromeBackground = NSColor(
+            calibratedRed: 0.05,
+            green: 0.06,
+            blue: 0.09,
+            alpha: pinnedToCorner ? 0.92 : 0.88
+        )
+        window.title = pinnedToCorner ? "Matcha PiP" : "Matcha Stream"
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
+        window.styleMask = pinnedToCorner ? [.borderless, .resizable, .fullSizeContentView] : [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.setContentSize(NSSize(width: pinnedToCorner ? 440 : 760, height: pinnedToCorner ? 290 : 480))
+        window.minSize = NSSize(width: pinnedToCorner ? 340 : 520, height: pinnedToCorner ? 220 : 320)
+        window.level = pinnedToCorner ? .floating : .normal
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = chromeBackground
+        window.hasShadow = true
+        window.isMovableByWindowBackground = !pinnedToCorner
+        if let contentView = window.contentView {
+            contentView.wantsLayer = true
+            contentView.layerContentsRedrawPolicy = .duringViewResize
+            contentView.layer?.masksToBounds = true
+            contentView.layer?.cornerRadius = pinnedToCorner ? 16 : 14
+            contentView.layer?.cornerCurve = .continuous
+            contentView.layer?.backgroundColor = chromeBackground.cgColor
+        }
+
+        if pinnedToCorner {
+            placeInTopRightCorner(window: window)
+            pinnedWindow = window
+        } else {
+            popoutWindow = window
+            window.center()
+        }
+
+        window.contentViewController = NSHostingController(
+            rootView: DetachedStreamWindowContent(
+                title: title,
+                streamURL: streamURL,
+                requestHeaders: requestHeaders,
+                preferWebPreview: preferWebPreview,
+                onClose: { window.close() }
+            )
+        )
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.pinnedWindow === window { self.pinnedWindow = nil }
+                if self.popoutWindow === window { self.popoutWindow = nil }
+            }
+        }
+
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func placeInTopRightCorner(window: NSWindow) {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let visible = screen.visibleFrame
+        let size = window.frame.size
+        let x = visible.maxX - size.width - 14
+        let y = visible.maxY - size.height - 20
+        window.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+}
+
+private struct DetachedStreamWindowContent: View {
+    let title: String
+    let streamURL: URL
+    let requestHeaders: [String: String]
+    let preferWebPreview: Bool
+    let onClose: () -> Void
+
+    var body: some View {
+        InlineMutedStreamPlayer(
+            streamURL: streamURL,
+            requestHeaders: requestHeaders,
+            preferWebPreview: preferWebPreview,
+            presentation: .detached
+        ) { onClose() }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
+    }
+}
+
+private enum StreamPlayerPresentation {
+    case embedded
+    case detached
+}
+
 private struct InlineMutedStreamPlayer: View {
     let streamURL: URL
     let requestHeaders: [String: String]
     let preferWebPreview: Bool
+    let presentation: StreamPlayerPresentation
     let onClose: () -> Void
 
     @State private var player: AVPlayer?
@@ -4093,72 +5415,68 @@ private struct InlineMutedStreamPlayer: View {
     @State private var previewTask: Task<Void, Never>?
     @State private var webPreviewURL: URL?
     @State private var activePreviewURL: URL?
-    @State private var didFallbackToWeb = false
     @State private var didAttemptFFmpegFallback = false
     @State private var ffmpegProcess: Process?
     @State private var ffmpegOutputDirectory: URL?
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Inline Preview (Muted)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button("Close", action: onClose)
-                    .font(.caption2)
-                    .buttonStyle(.borderless)
-            }
+    init(
+        streamURL: URL,
+        requestHeaders: [String: String],
+        preferWebPreview: Bool,
+        presentation: StreamPlayerPresentation = .embedded,
+        onClose: @escaping () -> Void
+    ) {
+        self.streamURL = streamURL
+        self.requestHeaders = requestHeaders
+        self.preferWebPreview = preferWebPreview
+        self.presentation = presentation
+        self.onClose = onClose
+    }
 
-            if let playbackError {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Unable to preview this stream inline.")
-                        .font(.caption.weight(.semibold))
-                    Text(playbackError)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(3)
+    private var isDetached: Bool {
+        presentation == .detached
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            previewSurface
+
+            HStack(spacing: 6) {
+                Button {
+                    NSWorkspace.shared.open(streamURL)
+                } label: {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 22, height: 20)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-                .frame(height: 156, alignment: .topLeading)
+                .buttonStyle(.plain)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.black.opacity(0.26))
                 )
-            } else if let webPreviewURL {
-                VStack(alignment: .leading, spacing: 4) {
-                    if didFallbackToWeb {
-                        Text("AVPlayer unsupported for this stream. Using web preview.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    NativeWebPreview(url: webPreviewURL, requestHeaders: requestHeaders)
-                        .frame(height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            } else if let player {
-                NativeAVPlayerView(player: player)
-                    .frame(height: 156)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                ProgressView("Preparing preview…")
-                    .font(.caption2)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 156)
-            }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.6)
+                )
 
-            HStack(spacing: 8) {
-                Button("Open Externally") {
-                    NSWorkspace.shared.open(streamURL)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 22, height: 20)
                 }
-                .font(.caption2)
-                .buttonStyle(.bordered)
-
-                Spacer()
+                .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.black.opacity(0.26))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.6)
+                )
             }
+            .padding(6)
         }
-        .matchaSectionCard(corner: 9, fillOpacity: 0.50, strokeOpacity: 0.08)
+        .background(playerChromeBackground)
         .onAppear {
             if player == nil {
                 startPreviewIfPossible()
@@ -4166,6 +5484,57 @@ private struct InlineMutedStreamPlayer: View {
         }
         .onDisappear {
             teardownPlayer()
+        }
+    }
+
+    @ViewBuilder
+    private var previewSurface: some View {
+        if playbackError != nil {
+            VStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.78))
+            }
+            .frame(maxWidth: .infinity, maxHeight: isDetached ? .infinity : nil)
+            .frame(height: isDetached ? nil : 170)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(0.24))
+            )
+        } else if let webPreviewURL {
+            NativeWebPreview(url: webPreviewURL, requestHeaders: requestHeaders)
+                .frame(maxWidth: .infinity, maxHeight: isDetached ? .infinity : nil)
+                .frame(height: isDetached ? nil : 180)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else if let player {
+            NativeAVPlayerView(player: player)
+                .frame(maxWidth: .infinity, maxHeight: isDetached ? .infinity : nil)
+                .frame(height: isDetached ? nil : 170)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity, maxHeight: isDetached ? .infinity : nil)
+                .frame(height: isDetached ? nil : 170)
+        }
+    }
+
+    @ViewBuilder
+    private var playerChromeBackground: some View {
+        if isDetached {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.82))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color(red: 0.10, green: 0.12, blue: 0.17).opacity(0.78))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
+                )
         }
     }
 
@@ -4197,7 +5566,6 @@ private struct InlineMutedStreamPlayer: View {
         player = nil
         webPreviewURL = nil
         activePreviewURL = nil
-        didFallbackToWeb = false
         didAttemptFFmpegFallback = false
         ffmpegProcess?.terminate()
         ffmpegProcess = nil
@@ -4217,7 +5585,6 @@ private struct InlineMutedStreamPlayer: View {
         player = nil
         playbackError = nil
         webPreviewURL = resolvedURL
-        didFallbackToWeb = true
     }
 
     private func configureAndPlay(with resolvedURL: URL) {
@@ -4236,7 +5603,6 @@ private struct InlineMutedStreamPlayer: View {
         p.isMuted = true
         player = p
         playbackError = nil
-        didFallbackToWeb = false
 
         statusObserver = item.observe(\.status, options: [.new, .initial]) { _, _ in
             DispatchQueue.main.async {
@@ -4426,6 +5792,7 @@ private struct NativeWebPreview: NSViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
         webView.allowsBackForwardNavigationGestures = false
+        webView.autoresizingMask = [.width, .height]
         var request = URLRequest(url: url)
         for (key, value) in requestHeaders where !value.isEmpty {
             request.setValue(value, forHTTPHeaderField: key)
@@ -4449,8 +5816,9 @@ private struct NativeAVPlayerView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
-        view.controlsStyle = .floating
-        view.showsSharingServiceButton = true
+        view.controlsStyle = .none
+        view.showsSharingServiceButton = false
+        view.autoresizingMask = [.width, .height]
         view.videoGravity = .resizeAspect
         view.player = player
         return view
