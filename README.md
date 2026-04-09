@@ -1,154 +1,104 @@
 <div align="center">
-<img src="https://github.com/suhasvemuri/Matcha/blob/main/MenuScores/Assets.xcassets/TahoeIcon.imageset/MenuScores-Tahoe.png" width="140">
+  <img src="Assets/Matcha-Icon.png" width="128" alt="Matcha icon">
 
   <h1>Matcha</h1>
-  <p>Live scores for cricket and football, right from your menu bar</p>
+  <p>Native macOS menu bar scores for cricket and football, with favorites, standings, rich match detail, and where-to-watch discovery.</p>
 
-</div>
-
-<div align="center">
-
-[![GitHub License](https://img.shields.io/github/license/suhasvemuri/Matcha)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/suhasvemuri/Matcha/total.svg)](https://github.com/suhasvemuri/Matcha/releases)
-[![macOS Version](https://img.shields.io/badge/macOS-26.0%2B-blue.svg)](https://www.apple.com/macos/)
-
+  <p>
+    <a href="https://github.com/suhasvemuri/Matcha/releases"><img src="https://img.shields.io/github/downloads/suhasvemuri/Matcha/total.svg" alt="Downloads"></a>
+    <a href="https://github.com/suhasvemuri/Matcha/blob/main/License"><img src="https://img.shields.io/github/license/suhasvemuri/Matcha" alt="License"></a>
+    <img src="https://img.shields.io/badge/macOS-26.0%2B-blue.svg" alt="macOS 26+">
+    <img src="https://img.shields.io/badge/version-0.9-6f7bf7.svg" alt="Version 0.9">
+  </p>
 </div>
 
 <br>
-<br>
 
-<img src="Assets/Matcha-Preview.gif" width="100%" alt="Matcha animated preview"/><br/>
+<img src="Assets/Matcha-Preview.gif" width="100%" alt="Matcha animated preview"><br/>
 
-## Supported Leagues
+## What Matcha Is
 
-- All ICC Cricket Tournaments
-- Indian Premiere League
-- NHL
-- Men's College Hockey
-- Women's College Hockey
-- NBA
-- WNBA
-- Men's College Basketball
-- Women's College Basketball
+Matcha is a macOS menu bar app built around fast score checking without opening a full sports website or a heavy desktop app.
+
+It is designed first for:
+
+- Cricket
+- Football / Soccer
+
+It also has secondary coverage for:
+
+- Formula 1
 - NFL
-- College Football
-- MLB
-- College Baseball
-- College Softball
-- Champions League
-- Europa Champions League
-- Women's Champions League
-- MLS
-- National Women's Soccer League
+- NBA
+
+## What It Does
+
+- Live and upcoming match list for favorited teams and competitions
+- Rich cricket scorecards with innings, batters, bowlers, fall of wickets, and match context
+- Football match detail and standings support
+- Favorites-based feed so the menu stays focused and short
+- Search-based discovery for teams and competitions
+- “Where to Watch” matching using IPTV M3U + EPG data
+- Streamed provider support for inline preview / watch options
+- Pinning for selected live scores in the menu bar
+- Match detail popovers with overview, scorecard, and standings
+- Native macOS settings, menu bar workflow, and launch-at-login support
+
+## Coverage Focus
+
+Matcha is currently tuned around the sports and competitions that matter most in this project:
+
+- ICC tournaments
+- IPL
 - Premier League
-- Women's Super League
+- UEFA competitions
 - La Liga
-- Bundesliga
-- Serie A
-- LIGA MX
-- Ligue 1
-- Eredivisie
-- Primeira Liga
-- FIFA World Cup
-- FIFA Women's World Cup
-- FIFA World Cup UEFA Qualifiers
-- FIFA World Cup CONMEBOL Qualifiers
-- FIFA World Cup CONCACAF Qualifiers
-- FIFA World Cup African Qualifiers
-- FIFA World Cup Asian Qualifiers
-- FIFA World Cup Oceanian Qualifiers
-- F1
-- Nascar Premier
-- Nascar Secondary
-- Nascar Truck
-- IndyCar
-- PGA
-- LPGA
-- NLL
-- PLL
-- Men's College Lacrosse
-- Women's College Lacrosse
-- Men's College Volleyball
-- Women's College Volleyball
+- FIFA competitions
 
-## Features
-
-- **Live Notch Scores** - Pin games to your notch and receive real-time score updates and game info available at a glace.
-- **Live Menubar Scores** - Pin games to your menu bar and receive real-time score updates available at a glance.
-- **Smart Notifications** - Get notified when a pinned game starts or finishes.
-- **League Control** - Choose which leagues are shown and stay focused on the sports you care about.
-- **Configurable** - Configure notification types and refresh intervals to fit your preferences.
-- **Lightweight & Native** - Built with Swift and SwiftUI for fast performance and seamless macOS integration.
+Other sports remain supported in the codebase where available, but the product direction is centered on cricket and football.
 
 ## Installation
 
-**Requires macOS 26.0 and later**
+**Requires macOS 26.0 or later**
 
-### Manual Installation
+### Manual Install
 
-1. Download the latest release.
-2. Move the app to your **Applications folder**.
-3. Run the app and grant necessary permissions when prompted.
+1. Download the latest release from [GitHub Releases](https://github.com/suhasvemuri/Matcha/releases).
+2. Move `Matcha.app` to `/Applications`.
+3. Launch the app from Applications or Spotlight.
 
-### Homebrew
+If macOS shows a verification warning on first launch, open:
 
-You can also install Matcha using Homebrew:
+- `System Settings`
+- `Privacy & Security`
+- `Open Anyway`
 
-```bash
-brew tap suhasvemuri/casks
-brew install --cask matcha
-```
+## Current Status
 
-**Note**: On first launch, macOS may warn that the app couldn't be verified. Click **OK**, then go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** to launch the app.
+This repository tracks the active `Matcha` build and UI work.
 
-## Usage
+Version `0.9` is the current pre-1.0 milestone:
 
-- **In order to use the notifications feature**, you must grant permission for Matcha to send notification. An option will be presented to do so in the walkthrough screen.
+- core scores UI is working
+- favorites and search are working
+- IPTV and Streamed watch discovery are wired
+- in-app update plumbing is wired
 
-1. Clicking on the menubar title will show a list available leagues.
-2. Hovering over a league will show a dropdown of all the games for the day in that league.
-3. Hovering over a game will allow you to choose from pinning the game to your menubar, notch, or viewing it in your browser.
+Signed public auto-update releases are still being finished.
 
-**Note: the notch feature works best on Macbooks with a notch. It will still work on non notched devices, but hovering over it will not open the expanded view.**
+## Tech
 
-4. You can use the clear set game option, or pin a different game to clear the menubar or notch.
-5. When a game is pinned to the notch, expanding it will reveal different info depending on the game state and league.
-6. You can quit the app directly from the menubar, or open the preferences window to configure app behaviors, or update the app.
+- SwiftUI
+- AppKit
+- Sparkle
+- DynamicNotchKit
+- LaunchAtLogin
+- KeyboardShortcuts
 
-## Roadmap
+## Ownership
 
-- [x] ~~Notch Display for Games~~
-- [x] ~~Links to more game info~~
-- [x] ~~Entire year race schedule for F1~~
-- [x] ~Additional F1 Driver Info~
-- [x] ~Additional Pre Game info~
-- [x] ~Additional Live Game Info~
-- [x] ~Recent plays in the notch component~
-- [x] ~Smoother overall notch animations for score updates and game loading~
-- [ ] Alerts for in game events (eg: powerplays, timeouts, yellow cards, etc)
-- [ ] App Widgets
-- [ ] Automatically pin games to the notch or menubar (favorite teams feature)
-
-...and more to come...
-
-## Dependencies
-
-- [DynamicNotchKit](https://github.com/MrKai77/DynamicNotchKit)
-- [LaunchAtLogin Modern](https://github.com/sindresorhus/LaunchAtLogin-Modern)
-- [Keyboard Shortcuts](https://github.com/sindresorhus/KeyboardShortcuts)
-- [Sparkle](https://github.com/sparkle-project/Sparkle)
-
-## Contributions
-
-Any contributions and feedback is welcome! Feel free to open issues or submit pull requests.
+Maintained by [suhasvemuri](https://github.com/suhasvemuri).
 
 ## License
 
-This project is licensed under the [GPLv3 License](LICENSE).
-
-## Latest Checkpoint (2026-02-24)
-
-- Renamed app branding to **Matcha** and introduced a dedicated Matcha dashboard flow.
-- Added richer cricket and soccer match cards, detail popovers, standings wiring, and favorites-driven discovery/search.
-- Integrated "Where to Watch" across IPTV (M3U + EPG) and Streamed provider sources.
-- Added local sports branding assets (flags/team logos) and UI polish passes for macOS-native menu interactions.
+This project is licensed under the [GPLv3 License](License).
