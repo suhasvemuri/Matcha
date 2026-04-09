@@ -17,7 +17,7 @@
 <br>
 <br>
 
-<img src="/Assets/MenuScores-3.png" width="100%" alt="Matcha"/><br/>
+<img src="Assets/Matcha-Preview.gif" width="100%" alt="Matcha animated preview"/><br/>
 
 ## Supported Leagues
 
