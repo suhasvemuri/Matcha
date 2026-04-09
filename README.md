@@ -21,6 +21,8 @@
 
 ## Supported Leagues
 
+- All ICC Cricket Tournaments
+- Indian Premiere League
 - NHL
 - Men's College Hockey
 - Women's College Hockey
