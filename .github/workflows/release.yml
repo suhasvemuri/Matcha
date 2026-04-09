@@ -1,0 +1,89 @@
+name: Release Matcha
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version metadata
+        id: version
+        run: |
+          set -euo pipefail
+          TAG_NAME="${GITHUB_REF_NAME#v}"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build app
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project MenuScores.xcodeproj \
+            -scheme MenuScores \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package app
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find build/Build/Products/Release -maxdepth 1 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found in build output"
+            exit 1
+          fi
+          mkdir -p release-artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.zip"
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
+            echo "SPARKLE_PRIVATE_KEY secret is missing"
+            exit 1
+          fi
+
+          /Applications/Xcode.app/Contents/Developer/usr/bin/xcrun --find ditto >/dev/null
+
+          echo "$SPARKLE_PRIVATE_KEY" | \
+          build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/" \
+            --release-notes-url-prefix "https://raw.githubusercontent.com/${{ github.repository }}/main/release-notes/" \
+            --link "https://github.com/${{ github.repository }}" \
+            release-artifacts
+
+      - name: Sync appcast to repository
+        run: |
+          set -euo pipefail
+          cp release-artifacts/appcast.xml appcast.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          cp release-artifacts/appcast.xml appcast.xml
+          git add appcast.xml
+          git diff --cached --quiet || git commit -m "chore: update appcast for ${GITHUB_REF_NAME}"
+          git push origin main
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.zip
+            release-artifacts/appcast.xml
+          generate_release_notes: true

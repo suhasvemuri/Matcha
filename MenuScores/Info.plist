@@ -5,6 +5,8 @@
 	<key>NSUserNotificationUsageDescription</key>
 	<string>Used to notify you about game start and completion updates</string>
 	<key>SUFeedURL</key>
-	<string>https://daniyalmaster693.github.io/MenuScores/appcast.xml</string>
+	<string>https://raw.githubusercontent.com/suhasvemuri/Matcha/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>F5cXSeJbvN0TFpPMurF2/6+tkZZosY1LQN0aYtkTkrU=</string>
 </dict>
 </plist>

@@ -44,10 +44,10 @@ struct AppLinksView: View {
                 Section {
                     ForEach(
                         [
-                            ("Matcha Help", "https://github.com/daniyalmaster693/MenuScores"),
-                            ("Feedback", "https://github.com/daniyalmaster693/MenuScores/issues/new"),
-                            ("Changelog", "https://github.com/daniyalmaster693/MenuScores/releases"),
-                            ("License", "https://github.com/daniyalmaster693/MenuScores/blob/main/License"),
+                            ("Matcha Help", "https://github.com/suhasvemuri/Matcha"),
+                            ("Feedback", "https://github.com/suhasvemuri/Matcha/issues/new"),
+                            ("Changelog", "https://github.com/suhasvemuri/Matcha/releases"),
+                            ("License", "https://github.com/suhasvemuri/Matcha/blob/main/License"),
 
                         ],
                         id: \.0

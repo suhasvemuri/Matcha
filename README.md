@@ -1,23 +1,23 @@
 <div align="center">
-<img src="https://github.com/daniyalmaster693/MenuScores/blob/main/MenuScores/Assets.xcassets/TahoeIcon.imageset/MenuScores-Tahoe.png" width="140">
+<img src="https://github.com/suhasvemuri/Matcha/blob/main/MenuScores/Assets.xcassets/TahoeIcon.imageset/MenuScores-Tahoe.png" width="140">
 
-  <h1>MenuScores</h1>
-  <p>Live Scores - Right From Your Notch</p>
+  <h1>Matcha</h1>
+  <p>Live scores for cricket and football, right from your menu bar</p>
 
 </div>
 
 <div align="center">
 
-[![GitHub License](https://img.shields.io/github/license/daniyalmaster693/MenuScores)](License)
-[![Downloads](https://img.shields.io/github/downloads/daniyalmaster693/MenuScores/total.svg)](https://github.com/daniyalmaster693/MenuScores/releases)
-[![macOS Version](https://img.shields.io/badge/macOS-13.0%2B-blue.svg)](https://www.apple.com/macos/)
+[![GitHub License](https://img.shields.io/github/license/suhasvemuri/Matcha)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/suhasvemuri/Matcha/total.svg)](https://github.com/suhasvemuri/Matcha/releases)
+[![macOS Version](https://img.shields.io/badge/macOS-26.0%2B-blue.svg)](https://www.apple.com/macos/)
 
 </div>
 
 <br>
 <br>
 
-<img src="/Assets/MenuScores-3.png" width="100%" alt="MenuScores"/><br/>
+<img src="/Assets/MenuScores-3.png" width="100%" alt="Matcha"/><br/>
 
 ## Supported Leagues
 
@@ -80,7 +80,7 @@
 
 ## Installation
 
-**Requires macOS 13.0 and later**
+**Requires macOS 26.0 and later**
 
 ### Manual Installation
 
@@ -90,18 +90,18 @@
 
 ### Homebrew
 
-You can also install MenuScores using Homebrew:
+You can also install Matcha using Homebrew:
 
 ```bash
-brew tap daniyalmaster693/casks
-brew install --cask menuscores
+brew tap suhasvemuri/casks
+brew install --cask matcha
 ```
 
 **Note**: On first launch, macOS may warn that the app couldn't be verified. Click **OK**, then go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** to launch the app.
 
 ## Usage
 
-- **In order to use the notifications feature**, you must grant permission for MenuScores to send notification. An option will be presented to do so in the walkthrough screen.
+- **In order to use the notifications feature**, you must grant permission for Matcha to send notification. An option will be presented to do so in the walkthrough screen.
 
 1. Clicking on the menubar title will show a list available leagues.
 2. Hovering over a league will show a dropdown of all the games for the day in that league.

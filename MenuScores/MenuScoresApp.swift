@@ -21,6 +21,7 @@ struct MenuScoresApp: App {
 
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
     @State private var autoRefreshTask: Task<Void, Never>?
+    @StateObject private var updaterController = MatchaUpdaterController()
 
     private var refreshInterval: TimeInterval {
         switch selectedOption {
@@ -333,17 +334,26 @@ struct MenuScoresApp: App {
         Settings {
             if #available(macOS 15.0, *) {
                 SettingsView()
+                    .environmentObject(updaterController)
                     .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
                     .containerBackground(.thickMaterial, for: .window)
             } else {
                 SettingsView()
+                    .environmentObject(updaterController)
             }
         }
 
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updaterController.checkForUpdates()
+                }
+                .disabled(!updaterController.canCheckForUpdates)
+            }
+
             CommandGroup(replacing: .help) {
                 Button("Matcha Help") {
-                    if let url = URL(string: "https://github.com/daniyalmaster693/MenuScores") {
+                    if let url = URL(string: "https://github.com/suhasvemuri/Matcha") {
                         NSWorkspace.shared.open(url)
                     }
                 }
@@ -351,19 +361,19 @@ struct MenuScoresApp: App {
                 Divider()
 
                 Button("Feedback") {
-                    if let url = URL(string: "https://github.com/daniyalmaster693/MenuScores/issues/new") {
+                    if let url = URL(string: "https://github.com/suhasvemuri/Matcha/issues/new") {
                         NSWorkspace.shared.open(url)
                     }
                 }
 
                 Button("Changelog") {
-                    if let url = URL(string: "https://github.com/daniyalmaster693/MenuScores/releases") {
+                    if let url = URL(string: "https://github.com/suhasvemuri/Matcha/releases") {
                         NSWorkspace.shared.open(url)
                     }
                 }
 
                 Button("License") {
-                    if let url = URL(string: "https://github.com/daniyalmaster693/MenuScores/blob/main/License") {
+                    if let url = URL(string: "https://github.com/suhasvemuri/Matcha/blob/main/License") {
                         NSWorkspace.shared.open(url)
                     }
                 }

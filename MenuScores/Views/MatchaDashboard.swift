@@ -160,11 +160,44 @@ private enum MatchaChromeStyle {
     static func windowBackground(for mode: MatchaAppearanceMode) -> NSColor {
         switch mode {
         case .liquidGlass:
-            return NSColor(calibratedRed: 0.26, green: 0.30, blue: 0.36, alpha: 0.42)
+            return NSColor(calibratedRed: 0.18, green: 0.20, blue: 0.24, alpha: 0.16)
         case .frostedGlass:
             return NSColor(calibratedRed: 0.34, green: 0.38, blue: 0.44, alpha: 0.58)
         case .darkFrosted:
             return NSColor(calibratedRed: 0.08, green: 0.09, blue: 0.12, alpha: 0.92)
+        }
+    }
+
+    static func primaryForeground(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.97)
+        case .frostedGlass:
+            return Color.white.opacity(0.95)
+        case .darkFrosted:
+            return Color.white.opacity(0.95)
+        }
+    }
+
+    static func secondaryForeground(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.76)
+        case .frostedGlass:
+            return Color.white.opacity(0.72)
+        case .darkFrosted:
+            return Color.white.opacity(0.72)
+        }
+    }
+
+    static func tertiaryForeground(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.58)
+        case .frostedGlass:
+            return Color.white.opacity(0.56)
+        case .darkFrosted:
+            return Color.white.opacity(0.54)
         }
     }
 }
@@ -189,14 +222,15 @@ private struct MatchaChromePanelModifier: ViewModifier {
         switch mode {
         case .liquidGlass:
             shape
-                .background(.ultraThinMaterial, in: shape)
+                .fill(Color.white.opacity(0.01))
+                .glassEffect(in: shape)
                 .overlay(
                     shape.fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.12),
-                                Color.white.opacity(0.05),
-                                Color.black.opacity(0.05),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.02),
+                                Color.clear,
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -207,8 +241,8 @@ private struct MatchaChromePanelModifier: ViewModifier {
                     shape.fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.22),
-                                Color.white.opacity(0.04),
+                                Color.white.opacity(0.14),
+                                Color.white.opacity(0.03),
                                 Color.clear,
                             ],
                             startPoint: .topLeading,
@@ -221,17 +255,17 @@ private struct MatchaChromePanelModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.34),
-                                    Color.white.opacity(0.08),
+                                    Color.white.opacity(0.18),
+                                    Color.white.opacity(0.04),
                                     Color.clear,
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 220, height: 22)
+                        .frame(width: 180, height: 16)
                         .offset(x: 18, y: 10)
-                        .blur(radius: 8)
+                        .blur(radius: 6)
                         .blendMode(.screen)
                         .allowsHitTesting(false)
                 }
@@ -286,7 +320,7 @@ private struct MatchaChromePanelModifier: ViewModifier {
     private func borderColor(for mode: MatchaAppearanceMode) -> Color {
         switch mode {
         case .liquidGlass:
-            return Color.white.opacity(0.20)
+            return Color.white.opacity(0.16)
         case .frostedGlass:
             return Color.white.opacity(0.12)
         case .darkFrosted:
@@ -297,7 +331,7 @@ private struct MatchaChromePanelModifier: ViewModifier {
     private func shadowColor(for mode: MatchaAppearanceMode) -> Color {
         switch mode {
         case .liquidGlass:
-            return .black.opacity(0.11)
+            return .black.opacity(0.08)
         case .frostedGlass:
             return .black.opacity(0.10)
         case .darkFrosted:
@@ -307,7 +341,7 @@ private struct MatchaChromePanelModifier: ViewModifier {
 
     private func shadowRadius(for mode: MatchaAppearanceMode) -> CGFloat {
         switch mode {
-        case .liquidGlass: return 13
+        case .liquidGlass: return 9
         case .frostedGlass: return 11
         case .darkFrosted: return 10
         }
@@ -327,12 +361,25 @@ private struct MatchaSectionCardModifier: ViewModifier {
 
         return content
             .padding(8)
-            .background(
-                shape.fill(sectionGradient(for: mode, fill: normalizedFill))
-            )
+            .background(sectionBackground(for: mode, shape: shape, fill: normalizedFill))
             .overlay(
                 shape.stroke(sectionStroke(for: mode, extra: strokeOpacity), lineWidth: 0.65)
             )
+    }
+
+    @ViewBuilder
+    private func sectionBackground(for mode: MatchaAppearanceMode, shape: RoundedRectangle, fill: CGFloat) -> some View {
+        switch mode {
+        case .liquidGlass:
+            shape
+                .fill(Color.white.opacity(0.01))
+                .glassEffect(in: shape)
+                .overlay(
+                    shape.fill(sectionGradient(for: mode, fill: fill))
+                )
+        case .frostedGlass, .darkFrosted:
+            shape.fill(sectionGradient(for: mode, fill: fill))
+        }
     }
 
     private func sectionGradient(for mode: MatchaAppearanceMode, fill: CGFloat) -> LinearGradient {
@@ -340,9 +387,9 @@ private struct MatchaSectionCardModifier: ViewModifier {
         case .liquidGlass:
             return LinearGradient(
                 colors: [
-                    Color.white.opacity(0.12 + (0.03 * fill)),
-                    Color.white.opacity(0.05 + (0.01 * fill)),
-                    Color(red: 0.24, green: 0.28, blue: 0.34).opacity(0.24 + (0.08 * fill)),
+                    Color.white.opacity(0.08 + (0.02 * fill)),
+                    Color.white.opacity(0.03 + (0.01 * fill)),
+                    Color.black.opacity(0.03 + (0.03 * fill)),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -372,7 +419,7 @@ private struct MatchaSectionCardModifier: ViewModifier {
     private func sectionStroke(for mode: MatchaAppearanceMode, extra: CGFloat) -> Color {
         switch mode {
         case .liquidGlass:
-            return Color.white.opacity(0.11 + extra)
+            return Color.white.opacity(0.13 + extra)
         case .frostedGlass:
             return Color.white.opacity(0.08 + extra)
         case .darkFrosted:
@@ -395,12 +442,25 @@ private struct MatchaSubtleCardModifier: ViewModifier {
         return content
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
-            .background(
-                shape.fill(subtleGradient(for: mode, fill: normalizedFill))
-            )
+            .background(subtleBackground(for: mode, shape: shape, fill: normalizedFill))
             .overlay(
                 shape.stroke(subtleStroke(for: mode, extra: strokeOpacity), lineWidth: 0.7)
             )
+    }
+
+    @ViewBuilder
+    private func subtleBackground(for mode: MatchaAppearanceMode, shape: RoundedRectangle, fill: CGFloat) -> some View {
+        switch mode {
+        case .liquidGlass:
+            shape
+                .fill(Color.white.opacity(0.008))
+                .glassEffect(in: shape)
+                .overlay(
+                    shape.fill(subtleGradient(for: mode, fill: fill))
+                )
+        case .frostedGlass, .darkFrosted:
+            shape.fill(subtleGradient(for: mode, fill: fill))
+        }
     }
 
     private func subtleGradient(for mode: MatchaAppearanceMode, fill: CGFloat) -> LinearGradient {
@@ -408,9 +468,9 @@ private struct MatchaSubtleCardModifier: ViewModifier {
         case .liquidGlass:
             return LinearGradient(
                 colors: [
-                    Color.white.opacity(0.07 + (0.02 * fill)),
-                    Color.white.opacity(0.03 + (0.01 * fill)),
-                    Color(red: 0.20, green: 0.24, blue: 0.30).opacity(0.20 + (0.08 * fill)),
+                    Color.white.opacity(0.04 + (0.01 * fill)),
+                    Color.white.opacity(0.015 + (0.01 * fill)),
+                    Color.black.opacity(0.02 + (0.03 * fill)),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -439,11 +499,77 @@ private struct MatchaSubtleCardModifier: ViewModifier {
     private func subtleStroke(for mode: MatchaAppearanceMode, extra: CGFloat) -> Color {
         switch mode {
         case .liquidGlass:
-            return Color.white.opacity(0.08 + extra)
+            return Color.white.opacity(0.11 + extra)
         case .frostedGlass:
             return Color.white.opacity(0.06 + extra)
         case .darkFrosted:
             return Color.white.opacity(0.03 + extra)
+        }
+    }
+}
+
+private struct MatchaAccessorySurfaceModifier: ViewModifier {
+    let corner: CGFloat
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func body(content: Content) -> some View {
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
+        let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+
+        content
+            .background(background(for: mode, shape: shape))
+            .overlay(shape.stroke(stroke(for: mode), lineWidth: 0.6))
+    }
+
+    @ViewBuilder
+    private func background(for mode: MatchaAppearanceMode, shape: RoundedRectangle) -> some View {
+        switch mode {
+        case .liquidGlass:
+            shape
+                .fill(Color.white.opacity(0.018))
+                .glassEffect(in: shape)
+                .overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.018),
+                                Color.clear,
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+        case .frostedGlass:
+            shape.fill(Color.white.opacity(0.055))
+        case .darkFrosted:
+            shape.fill(Color.white.opacity(0.04))
+        }
+    }
+
+    private func stroke(for mode: MatchaAppearanceMode) -> Color {
+        switch mode {
+        case .liquidGlass:
+            return Color.white.opacity(0.18)
+        case .frostedGlass:
+            return Color.white.opacity(0.10)
+        case .darkFrosted:
+            return Color.white.opacity(0.08)
+        }
+    }
+}
+
+private struct MatchaGlassContainerModifier: ViewModifier {
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
+
+    func body(content: Content) -> some View {
+        if MatchaChromeStyle.mode(from: appearanceMode) == .liquidGlass {
+            GlassEffectContainer(spacing: 10) {
+                content
+            }
+        } else {
+            content
         }
     }
 }
@@ -493,6 +619,7 @@ struct MatchaDashboardView: View {
     @AppStorage("favoriteCompetitionsCsv") private var favoriteCompetitionsCsv = ""
     @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
     @AppStorage("enableDemoMode") private var enableDemoMode = false
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
 
     @State private var selectedDetail: MatchDetailSelection?
     @State private var searchText: String = ""
@@ -515,6 +642,10 @@ struct MatchaDashboardView: View {
 
     private var maxDisplayedMatches: Int {
         compactMode ? 30 : 20
+    }
+
+    private var chromeMode: MatchaAppearanceMode {
+        MatchaChromeStyle.mode(from: appearanceMode)
     }
 
     private var soccerTerms: [String] {
@@ -1386,9 +1517,13 @@ struct MatchaDashboardView: View {
             }
             .font(.system(size: 12, weight: .semibold))
             .controlSize(.small)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .matchaAccessorySurface(corner: 12)
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .matchaGlassContainer()
         .matchaChromePanel()
         .overlay(alignment: .bottomTrailing) {
             WindowResizeHandle(window: menuWindow, minSize: menuMinSize, maxSize: menuMaxSize)
@@ -1495,22 +1630,24 @@ struct MatchaDashboardView: View {
         HStack(spacing: 8) {
             Image(systemName: "sportscourt.fill")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
                 .padding(6)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(
                             LinearGradient(
-                                colors: [turfGreen.opacity(0.26), Color.white.opacity(0.06)],
+                                colors: [turfGreen.opacity(0.20), Color.white.opacity(0.04)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                 )
+                .matchaAccessorySurface(corner: 8)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Matcha")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
             }
 
             Spacer()
@@ -1537,40 +1674,39 @@ struct MatchaDashboardView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search matches, teams, competitions", text: $searchText)
+                    .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
+                TextField(
+                    "",
+                    text: $searchText,
+                    prompt: Text("Search matches, teams, competitions")
+                        .foregroundColor(MatchaChromeStyle.tertiaryForeground(for: chromeMode))
+                )
                     .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
                     .textFieldStyle(.plain)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.045))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
-                    )
-            )
+            .matchaAccessorySurface(corner: 10)
 
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Search across matches, teams, and competitions.")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
             } else {
                 if searchedMatches.isEmpty, searchedCatalogItems.isEmpty {
                     Text("No results")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 } else {
                     if !searchedMatches.isEmpty {
                         MatchaSectionHeading(title: "Matches")
@@ -1597,7 +1733,7 @@ struct MatchaDashboardView: View {
             HStack(spacing: 8) {
                 Text(visibilityFilter == .live ? "Live now" : "\(visibleMatchCount) matches")
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 if visibilityFilter == .all, !showRecentResults, !recentCompletedDisplayedMatches.isEmpty {
                     Text("\(recentCompletedDisplayedMatches.count) recent")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -1620,6 +1756,9 @@ struct MatchaDashboardView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 104)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .matchaAccessorySurface(corner: 10)
         }
     }
 
@@ -2152,6 +2291,14 @@ private extension View {
     func matchaSubtleCard(corner: CGFloat = 9, fillOpacity: CGFloat = 0.045, strokeOpacity: CGFloat = 0.06) -> some View {
         modifier(MatchaSubtleCardModifier(corner: corner, fillOpacity: fillOpacity, strokeOpacity: strokeOpacity))
     }
+
+    func matchaAccessorySurface(corner: CGFloat = 10) -> some View {
+        modifier(MatchaAccessorySurfaceModifier(corner: corner))
+    }
+
+    func matchaGlassContainer() -> some View {
+        modifier(MatchaGlassContainerModifier())
+    }
 }
 
 private enum MatchaImageCache {
@@ -2592,13 +2739,10 @@ private struct MatchaMiniControlButtonStyle: ButtonStyle {
         let mode = MatchaChromeStyle.mode(from: appearanceMode)
         configuration.label
             .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundColor(prominent ? .white : .primary)
+            .foregroundColor(prominent ? .white : MatchaChromeStyle.primaryForeground(for: mode))
             .padding(.horizontal, 9)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(backgroundFill(for: mode, pressed: configuration.isPressed))
-            )
+            .background(backgroundView(for: mode, pressed: configuration.isPressed))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(borderColor(for: mode), lineWidth: 0.6)
@@ -2606,18 +2750,29 @@ private struct MatchaMiniControlButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
     }
 
-    private func backgroundFill(for mode: MatchaAppearanceMode, pressed: Bool) -> Color {
-        if prominent {
-            return Color.accentColor.opacity(pressed ? 0.62 : 0.80)
-        }
+    @ViewBuilder
+    private func backgroundView(for mode: MatchaAppearanceMode, pressed: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
 
-        switch mode {
-        case .liquidGlass:
-            return Color.white.opacity(pressed ? 0.14 : 0.09)
-        case .frostedGlass:
-            return Color.white.opacity(pressed ? 0.10 : 0.07)
-        case .darkFrosted:
-            return Color.white.opacity(pressed ? 0.09 : 0.06)
+        if prominent {
+            shape
+                .fill(Color.accentColor.opacity(pressed ? 0.62 : 0.80))
+        } else {
+            switch mode {
+            case .liquidGlass:
+                shape
+                    .fill(Color.white.opacity(0.01))
+                    .glassEffect(in: shape)
+                    .overlay(
+                        shape.fill(Color.white.opacity(pressed ? 0.05 : 0.02))
+                    )
+            case .frostedGlass:
+                shape
+                    .fill(Color.white.opacity(pressed ? 0.10 : 0.07))
+            case .darkFrosted:
+                shape
+                    .fill(Color.white.opacity(pressed ? 0.09 : 0.06))
+            }
         }
     }
 
@@ -2640,6 +2795,7 @@ private struct MatchaMiniControlButtonStyle: ButtonStyle {
 private struct MatchaProviderBadge: View {
     let title: String
     let tint: Color
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
 
     init(source: String) {
         self.title = source == "streamed" ? "Streamed" : "IPTV"
@@ -2654,9 +2810,10 @@ private struct MatchaProviderBadge: View {
     }
 
     var body: some View {
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
         Text(title)
             .font(.system(size: 9, weight: .semibold, design: .rounded))
-            .foregroundColor(.white.opacity(0.78))
+            .foregroundColor(MatchaChromeStyle.primaryForeground(for: mode).opacity(0.86))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Capsule().fill(tint.opacity(0.16)))
@@ -2669,11 +2826,13 @@ private struct MatchaProviderBadge: View {
 
 private struct MatchaSectionHeading: View {
     let title: String
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
 
     var body: some View {
+        let mode = MatchaChromeStyle.mode(from: appearanceMode)
         Text(title)
             .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundColor(.secondary.opacity(0.92))
+            .foregroundColor(MatchaChromeStyle.secondaryForeground(for: mode))
             .tracking(0.1)
     }
 }
@@ -3272,8 +3431,10 @@ private struct SoccerInlineDetailPane: View {
     @State private var inlinePreviewPreferWeb = false
     @State private var didAutoStartLivePreview = false
     @State private var showBroadcastHints = false
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
 
     private var game: Event { item.game }
+    private var chromeMode: MatchaAppearanceMode { MatchaChromeStyle.mode(from: appearanceMode) }
 
     private var channels: [String] {
         guard let broadcasts = game.competitions.first?.broadcasts else { return [] }
@@ -3312,17 +3473,18 @@ private struct SoccerInlineDetailPane: View {
                     Image(systemName: "xmark.circle.fill")
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 .buttonStyle(.plain)
             }
 
             Text(displayText(for: game, league: item.leagueCode))
                 .font(.title3.weight(.semibold))
+                .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
                 .lineLimit(2)
 
             Text(game.status.type.detail ?? game.status.type.shortDetail ?? "")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 .lineLimit(2)
 
             HStack(spacing: 8) {
@@ -3346,6 +3508,9 @@ private struct SoccerInlineDetailPane: View {
             }
             .font(.caption)
             .controlSize(.small)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .matchaAccessorySurface(corner: 12)
 
             Picker("Section", selection: $selectedTab) {
                 Text("Overview").tag(SoccerDetailTab.overview)
@@ -3355,6 +3520,8 @@ private struct SoccerInlineDetailPane: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
+            .padding(4)
+            .matchaAccessorySurface(corner: 12)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 7) {
@@ -3371,6 +3538,7 @@ private struct SoccerInlineDetailPane: View {
             .padding(.top, 2)
         }
         .padding(13)
+        .matchaGlassContainer()
         .task {
             if enableDataFetch {
                 applyPreloadedWatchOptions()
@@ -3959,7 +4127,9 @@ private struct CricketInlineDetailPane: View {
     @State private var inlineStreamHeaders: [String: String] = [:]
     @State private var inlinePreviewPreferWeb = false
     @State private var didAutoStartLivePreview = false
+    @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.liquidGlass.rawValue
     private static let allStandingsGroupsID = "__all_groups__"
+    private var chromeMode: MatchaAppearanceMode { MatchaChromeStyle.mode(from: appearanceMode) }
 
     private var allStandingsGroup: CricketStandingGroup? {
         guard let groups = standingsTable?.groups, !groups.isEmpty else { return nil }
@@ -4053,7 +4223,7 @@ private struct CricketInlineDetailPane: View {
                     Image(systemName: "xmark.circle.fill")
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 .buttonStyle(.plain)
             }
 
@@ -4062,22 +4232,22 @@ private struct CricketInlineDetailPane: View {
                 if !match.matchDesc.isEmpty {
                     Text(cleanedOverviewFixture(match.matchDesc))
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                         .lineLimit(1)
                 }
                 if !statusSummary.isEmpty {
                     Text("•")
                         .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundColor(MatchaChromeStyle.tertiaryForeground(for: chromeMode))
                     Text(statusSummary)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                         .lineLimit(1)
                 }
                 Spacer()
                 Text(matchDayLine)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
             }
 
             HStack(spacing: 8) {
@@ -4103,6 +4273,9 @@ private struct CricketInlineDetailPane: View {
             }
             .font(.caption2)
             .controlSize(.small)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .matchaAccessorySurface(corner: 12)
 
             Picker("Section", selection: $selectedTab) {
                 Text("Overview").tag(CricketDetailTab.overview)
@@ -4112,6 +4285,8 @@ private struct CricketInlineDetailPane: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
+            .padding(4)
+            .matchaAccessorySurface(corner: 12)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 7) {
@@ -4128,6 +4303,7 @@ private struct CricketInlineDetailPane: View {
             .padding(.top, 2)
         }
         .padding(13)
+        .matchaGlassContainer()
         .task(id: match.id) {
             if enableDataFetch {
                 applyPreloadedWatchOptions()

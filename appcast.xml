@@ -1,17 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>MenuScores Updates</title>
-    <item>
-      <title>Version 2.1.2</title>
-      <sparkle:releaseNotesLink>https://github.com/daniyalmaster693/MenuScores/releases/tag/2.1.2</sparkle:releaseNotesLink>
-      <pubDate>Fri, 10 October 2025 6:29:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/daniyalmaster693/MenuScores/releases/download/2.1.2/MenuScores.zip"
-        sparkle:version="6"
-        sparkle:shortVersionString="2.1.2"
-        length="12345678"
-        type="application/octet-stream"/>
-    </item>
+    <title>Matcha Updates</title>
+    <link>https://github.com/suhasvemuri/Matcha/releases</link>
+    <description>Signed Sparkle appcast for Matcha releases.</description>
+    <language>en</language>
   </channel>
 </rss>
