@@ -20,15 +20,17 @@ struct AppLinksView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 5)
 
-            Text("Matcha ")
-                .font(.title2)
-                .bold()
-                .foregroundColor(.primary)
+            (
+                Text("Matcha ")
+                    .font(.title2)
+                    .bold()
+                    .foregroundColor(.primary)
                 +
                 Text(version)
-                .font(.title2)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+            )
 
             Form {
                 Section {
