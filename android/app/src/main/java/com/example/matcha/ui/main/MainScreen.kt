@@ -15,8 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -51,7 +55,12 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val sheet by viewModel.streamSheet.collectAsStateWithLifecycle()
-    ScoresContent(state = state, onWatch = viewModel::showStreams, modifier = modifier)
+    ScoresContent(
+        state = state,
+        onWatch = viewModel::showStreams,
+        onOpenFavorites = { onItemClick(com.example.matcha.Favorites) },
+        modifier = modifier,
+    )
     sheet?.let {
         StreamSheet(state = it, onDismiss = viewModel::dismissStreams)
     }
@@ -61,16 +70,25 @@ fun MainScreen(
 private fun ScoresContent(
     state: ScoresUiState,
     onWatch: (Match) -> Unit,
+    onOpenFavorites: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        Text(
-            text = "Matcha",
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = "Matcha",
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onOpenFavorites) {
+                Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
+            }
+        }
         when (state) {
             ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator() }
             ScoresUiState.Empty -> CenteredBox {
