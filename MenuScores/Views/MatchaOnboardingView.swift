@@ -718,6 +718,7 @@ struct MatchaOnboardingView: View {
     }
 
     private func finishOnboarding() {
+        FavoriteSelectionsStore.syncFeedEnables(from: favoriteSelectionsJSON)
         hasCompletedOnboarding = true
     }
 }

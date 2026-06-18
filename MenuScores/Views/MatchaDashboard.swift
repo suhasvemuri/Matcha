@@ -1343,6 +1343,13 @@ struct MatchaDashboardView: View {
             if !hasCompletedOnboarding && hasStoredFavoriteSelections {
                 hasCompletedOnboarding = true
             }
+            // Ensure feeds for already-favorited competitions are fetched
+            // (covers existing installs predating the favorites->feed sync).
+            FavoriteSelectionsStore.syncFeedEnables(from: favoriteSelectionsJSON)
+        }
+        .task(id: favoriteSelectionsJSON) {
+            // Re-sync whenever favorites change (Settings edits, search adds).
+            FavoriteSelectionsStore.syncFeedEnables(from: favoriteSelectionsJSON)
         }
         .task(id: selectionRestoreSignature) {
             restorePersistedSelectionIfNeeded()

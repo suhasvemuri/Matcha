@@ -115,6 +115,65 @@ enum FavoriteSelectionsStore {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
             .filter { !$0.isEmpty }
     }
+
+    /// Maps a favoritable competition (by lowercased catalog name) to the
+    /// `@AppStorage` flag that gates its ESPN feed fetch. Favoriting a
+    /// competition is meaningless unless its feed is actually fetched, so we
+    /// keep these in sync. Cricket competitions all flow through the single
+    /// `enableCricket` feed.
+    static let competitionFeedEnableKeys: [String: String] = [
+        // Soccer leagues
+        "mls": "enableMLS",
+        "nwsl": "enableNWSL",
+        "premier league": "enableEPL",
+        "uefa champions league": "enableUEFA",
+        "uefa europa league": "enableEUEFA",
+        "la liga": "enableESP",
+        "bundesliga": "enableGER",
+        "serie a": "enableITA",
+        "ligue 1": "enableFRA",
+        "eredivisie": "enableNED",
+        "primeira liga": "enablePOR",
+        "liga mx": "enableMEX",
+        // FIFA World Cup family
+        "fifa world cup": "enableFFWC",
+        "fifa women's world cup": "enableFFWWC",
+        "fifa wc uefa qualifiers": "enableFFWCQUEFA",
+        "fifa wc conmebol qualifiers": "enableCONMEBOL",
+        "fifa wc concacaf qualifiers": "enableCONCACAF",
+        "fifa wc african qualifiers": "enableCAF",
+        "fifa wc asian qualifiers": "enableAFC",
+        "fifa wc oceanian qualifiers": "enableOFC",
+        // Cricket (single shared feed)
+        "ipl": "enableCricket",
+        "icc cricket world cup": "enableCricket",
+        "icc t20 world cup": "enableCricket",
+        "wtc": "enableCricket",
+        "bbl": "enableCricket",
+        "psl": "enableCricket",
+        "cpl": "enableCricket",
+        "the hundred": "enableCricket",
+    ]
+
+    /// Enables every feed required by the user's favorite competitions so the
+    /// matches they picked actually get fetched. Returns the set of keys it
+    /// switched on (useful for logging/tests). Never disables anything.
+    @discardableResult
+    static func syncFeedEnables(from json: String, defaults: UserDefaults = .standard) -> [String] {
+        let favoritedCompetitions = decode(from: json)
+            .filter { $0.kind == .competition }
+            .map { $0.name.lowercased() }
+
+        var switchedOn: [String] = []
+        for name in favoritedCompetitions {
+            guard let key = competitionFeedEnableKeys[name] else { continue }
+            if !defaults.bool(forKey: key) {
+                defaults.set(true, forKey: key)
+                switchedOn.append(key)
+            }
+        }
+        return switchedOn
+    }
 }
 
 struct FavoriteCatalogItem: Identifiable, Hashable {
