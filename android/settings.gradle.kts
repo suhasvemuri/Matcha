@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "Matcha"
 include(":app")
+include(":wear")
