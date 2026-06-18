@@ -38,14 +38,20 @@ leagues.
 
 ## Features
 
-- **Scores** — grouped by league, live/upcoming/final states, team logos (Coil)
+- **Scores** — football + **cricket**, grouped by league, live/upcoming/final
+  states, team logos (Coil). Cricket scores ("161/5") parse through the same
+  ESPN pipeline.
+- **Favorites editor** — in-app screen (star button on the scores header) to
+  toggle followed leagues by sport and add favorite-team text filters
 - **Where to watch** — tap a match → bottom sheet of streams (Streamed provider)
 - **Home-screen widget** — Glance widget of favorite live scores, refreshed by
   a 15-minute WorkManager job
 - **Live notifications** — `LiveScoreService` foreground service polls live
   matches every 45s and posts/updates an ongoing notification per match
   (Android's analogue to iOS Live Activities), self-stopping when nothing is live
-- **Wear OS** — standalone watch app showing live scores led by the World Cup
+- **Wear OS** — standalone watch app + a Tile, showing live scores. Favorites
+  sync from the phone over the Wearable Data Layer
+  (`WearFavoritesPublisher` → `FavoritesSyncService`)
 
 ## Build & run
 
