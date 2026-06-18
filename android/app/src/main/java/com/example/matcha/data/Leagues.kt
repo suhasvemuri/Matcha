@@ -28,6 +28,10 @@ object Leagues {
     private fun soccer(id: String, name: String, slug: String, country: String? = null) =
         League(id, name, Sport.SOCCER, "soccer", slug, country)
 
+    /** ESPN exposes cricket as `/cricket/{numericLeagueId}/scoreboard`. */
+    private fun cricket(id: String, name: String, espnId: String, country: String? = null) =
+        League(id, name, Sport.CRICKET, "cricket", espnId, country)
+
     val all: List<League> = listOf(
         // FIFA World Cup family — what the user specifically wanted surfaced.
         soccer("FFWC", "FIFA World Cup", "fifa.world", "International"),
@@ -51,6 +55,10 @@ object Leagues {
         soccer("MLS", "MLS", "USA.1", "United States"),
         soccer("NWSL", "NWSL", "USA.NWSL", "United States"),
         soccer("MEX", "Liga MX", "MEX.1", "Mexico"),
+        // Cricket (ESPN numeric league ids)
+        cricket("IPL", "IPL", "8048", "India"),
+        cricket("CWC", "ICC World Cup", "8039", "International"),
+        cricket("BBL", "Big Bash League", "8044", "Australia"),
     )
 
     private val byId = all.associateBy { it.id }
@@ -58,5 +66,5 @@ object Leagues {
     fun byId(id: String): League? = byId[id]
 
     /** Sensible defaults for a fresh install before the user picks favorites. */
-    val defaultFavoriteIds: Set<String> = setOf("FFWC", "EPL", "UEFA")
+    val defaultFavoriteIds: Set<String> = setOf("FFWC", "EPL", "UEFA", "IPL")
 }

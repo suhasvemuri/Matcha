@@ -148,9 +148,12 @@ private fun TeamLine(team: MatchTeam, state: MatchState) {
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = team.score ?: "-",
+            // Cricket scores arrive verbose ("161/5 (18/20 ov, target 156)");
+            // show the concise lead ("161/5"). Soccer scores are unaffected.
+            text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "-" },
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
+            maxLines = 1,
             color = if (state == MatchState.UPCOMING)
                 MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
