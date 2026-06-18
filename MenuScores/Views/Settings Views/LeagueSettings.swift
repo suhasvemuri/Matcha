@@ -80,9 +80,13 @@ struct LeagueSettingsView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("Leagues")
+            Text("Sports & Data")
                 .font(.title2)
                 .bold()
+
+            Text("Keep Matcha focused on the competitions you actually want refreshed in the background.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Form {
                 Section("Core Sports") {

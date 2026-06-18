@@ -16,21 +16,14 @@ struct AppLinksView: View {
             Image("TahoeIcon")
                 .resizable()
                 .frame(width: 67, height: 67)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.top, 10)
                 .padding(.bottom, 5)
 
-            (
-                Text("Matcha ")
-                    .font(.title2)
-                    .bold()
-                    .foregroundColor(.primary)
-                +
-                Text(version)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
-            )
+            Text("Matcha \(version)")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
 
             Form {
                 Section {

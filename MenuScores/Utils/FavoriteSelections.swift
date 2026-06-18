@@ -131,3 +131,113 @@ struct FavoriteCatalogItem: Identifiable, Hashable {
         FavoriteSelection(kind: kind, sport: sport, name: name, country: country)
     }
 }
+
+enum FavoriteCatalogProvider {
+    static let soccerCompetitions: [FavoriteCatalogItem] = [
+        .init(kind: .competition, sport: .soccer, name: "MLS", country: "United States"),
+        .init(kind: .competition, sport: .soccer, name: "NWSL", country: "United States"),
+        .init(kind: .competition, sport: .soccer, name: "Premier League", country: "England"),
+        .init(kind: .competition, sport: .soccer, name: "UEFA Champions League", country: "Europe"),
+        .init(kind: .competition, sport: .soccer, name: "UEFA Europa League", country: "Europe"),
+        .init(kind: .competition, sport: .soccer, name: "La Liga", country: "Spain"),
+        .init(kind: .competition, sport: .soccer, name: "Bundesliga", country: "Germany"),
+        .init(kind: .competition, sport: .soccer, name: "Serie A", country: "Italy"),
+        .init(kind: .competition, sport: .soccer, name: "Ligue 1", country: "France"),
+        .init(kind: .competition, sport: .soccer, name: "Eredivisie", country: "Netherlands"),
+        .init(kind: .competition, sport: .soccer, name: "Primeira Liga", country: "Portugal"),
+        .init(kind: .competition, sport: .soccer, name: "Liga MX", country: "Mexico"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA World Cup", country: "International"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA Women's World Cup", country: "International"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC UEFA Qualifiers", country: "Europe"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC CONMEBOL Qualifiers", country: "South America"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC CONCACAF Qualifiers", country: "North America"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC African Qualifiers", country: "Africa"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC Asian Qualifiers", country: "Asia"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA WC Oceanian Qualifiers", country: "Oceania"),
+    ]
+
+    static let cricketTeams: [FavoriteCatalogItem] = [
+        .init(kind: .team, sport: .cricket, name: "India", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Australia", country: "Australia"),
+        .init(kind: .team, sport: .cricket, name: "England", country: "England"),
+        .init(kind: .team, sport: .cricket, name: "Pakistan", country: "Pakistan"),
+        .init(kind: .team, sport: .cricket, name: "South Africa", country: "South Africa"),
+        .init(kind: .team, sport: .cricket, name: "New Zealand", country: "New Zealand"),
+        .init(kind: .team, sport: .cricket, name: "Sri Lanka", country: "Sri Lanka"),
+        .init(kind: .team, sport: .cricket, name: "Bangladesh", country: "Bangladesh"),
+        .init(kind: .team, sport: .cricket, name: "West Indies", country: "West Indies"),
+        .init(kind: .team, sport: .cricket, name: "Afghanistan", country: "Afghanistan"),
+        .init(kind: .team, sport: .cricket, name: "Mumbai Indians", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Chennai Super Kings", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Royal Challengers Bengaluru", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Kolkata Knight Riders", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Rajasthan Royals", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Sunrisers Hyderabad", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Lucknow Super Giants", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Punjab Kings", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Delhi Capitals", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Gujarat Titans", country: "India"),
+    ]
+
+    static let cricketCompetitions: [FavoriteCatalogItem] = [
+        .init(kind: .competition, sport: .cricket, name: "IPL", country: "India"),
+        .init(kind: .competition, sport: .cricket, name: "ICC Cricket World Cup", country: "International"),
+        .init(kind: .competition, sport: .cricket, name: "ICC T20 World Cup", country: "International"),
+        .init(kind: .competition, sport: .cricket, name: "WTC", country: "International"),
+        .init(kind: .competition, sport: .cricket, name: "BBL", country: "Australia"),
+        .init(kind: .competition, sport: .cricket, name: "PSL", country: "Pakistan"),
+        .init(kind: .competition, sport: .cricket, name: "CPL", country: "West Indies"),
+        .init(kind: .competition, sport: .cricket, name: "The Hundred", country: "England"),
+    ]
+
+    static let quickStartPicks: [FavoriteCatalogItem] = [
+        .init(kind: .competition, sport: .cricket, name: "IPL", country: "India"),
+        .init(kind: .competition, sport: .cricket, name: "ICC T20 World Cup", country: "International"),
+        .init(kind: .team, sport: .cricket, name: "India", country: "India"),
+        .init(kind: .team, sport: .cricket, name: "Australia", country: "Australia"),
+        .init(kind: .competition, sport: .soccer, name: "Premier League", country: "England"),
+        .init(kind: .competition, sport: .soccer, name: "UEFA Champions League", country: "Europe"),
+        .init(kind: .competition, sport: .soccer, name: "La Liga", country: "Spain"),
+        .init(kind: .competition, sport: .soccer, name: "FIFA World Cup", country: "International"),
+    ]
+
+    static func allStaticItems() -> [FavoriteCatalogItem] {
+        dedupe(soccerCompetitions + cricketTeams + cricketCompetitions)
+    }
+
+    static func loadSoccerTeamCatalog() async -> [FavoriteCatalogItem] {
+        let leagueCountry: [(code: String, country: String)] = [
+            ("MLS", "United States"),
+            ("NWSL", "United States"),
+            ("EPL", "England"),
+            ("UEFA", "Europe"),
+            ("EUEFA", "Europe"),
+            ("ESP", "Spain"),
+            ("GER", "Germany"),
+            ("ITA", "Italy"),
+            ("FRA", "France"),
+            ("NED", "Netherlands"),
+            ("POR", "Portugal"),
+            ("MEX", "Mexico"),
+        ]
+
+        var collected: [FavoriteCatalogItem] = []
+
+        for league in leagueCountry {
+            guard let standings = await SoccerStandingsService.shared.topStandings(for: league.code, maxRows: 40) else {
+                continue
+            }
+
+            for row in standings.rows {
+                collected.append(.init(kind: .team, sport: .soccer, name: row.teamName, country: league.country))
+            }
+        }
+
+        return dedupe(collected)
+    }
+
+    static func dedupe(_ items: [FavoriteCatalogItem]) -> [FavoriteCatalogItem] {
+        FavoriteSelectionsStore.dedupe(items.map(\.selection))
+            .map { FavoriteCatalogItem(kind: $0.kind, sport: $0.sport, name: $0.name, country: $0.country) }
+    }
+}
