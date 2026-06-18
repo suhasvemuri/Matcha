@@ -5,8 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.matcha.data.FavoritesStore
 import com.example.matcha.data.LeagueMatches
+import com.example.matcha.data.Match
 import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchaRepository
+import com.example.matcha.data.streaming.StreamOption
+import com.example.matcha.data.streaming.StreamedResolver
 import com.example.matcha.notifications.LiveScoreService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,9 +24,13 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
 
     private val favorites = FavoritesStore(app)
     private val repository = MatchaRepository.get(app)
+    private val resolver = StreamedResolver()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private val _streamSheet = MutableStateFlow<StreamSheetState?>(null)
+    val streamSheet: StateFlow<StreamSheetState?> = _streamSheet.asStateFlow()
 
     /** Combined favorites snapshot, re-fetched whenever the user changes them. */
     private val favoriteSnapshot: StateFlow<FavoriteSnapshot> =
@@ -68,11 +75,32 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun showStreams(match: Match) {
+        _streamSheet.value = StreamSheetState(match, loading = true)
+        viewModelScope.launch {
+            val options = runCatching { resolver.resolve(match) }.getOrDefault(emptyList())
+            // Ignore if the user already dismissed or opened another match.
+            if (_streamSheet.value?.match?.id == match.id) {
+                _streamSheet.value = StreamSheetState(match, loading = false, options = options)
+            }
+        }
+    }
+
+    fun dismissStreams() {
+        _streamSheet.value = null
+    }
+
     private data class FavoriteSnapshot(
         val leagues: Set<String> = emptySet(),
         val teams: Set<String> = emptySet(),
     )
 }
+
+data class StreamSheetState(
+    val match: Match,
+    val loading: Boolean,
+    val options: List<StreamOption> = emptyList(),
+)
 
 sealed interface ScoresUiState {
     data object Loading : ScoresUiState
