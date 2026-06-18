@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.matcha.data.FavoritesStore
 import com.example.matcha.data.LeagueMatches
+import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchaRepository
+import com.example.matcha.notifications.LiveScoreService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +55,16 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
             val snap = favoriteSnapshot.first()
             runCatching { repository.refresh(snap.leagues, snap.teams) }
             _isRefreshing.value = false
+            startLiveTrackingIfNeeded()
+        }
+    }
+
+    /** Spin up the live-score foreground service when something is in play. */
+    private fun startLiveTrackingIfNeeded() {
+        val hasLive = repository.leagueMatches.value
+            .any { group -> group.matches.any { it.state == MatchState.LIVE } }
+        if (hasLive) {
+            LiveScoreService.start(getApplication())
         }
     }
 
