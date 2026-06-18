@@ -36,7 +36,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Package app
+      - name: Package DMG
         run: |
           set -euo pipefail
           APP_PATH=$(find build/Build/Products/Release -maxdepth 1 -name "*.app" -print -quit)
@@ -45,7 +45,8 @@ jobs:
             exit 1
           fi
           mkdir -p release-artifacts
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.zip"
+          chmod +x scripts/package_dmg.sh
+          scripts/package_dmg.sh "$APP_PATH" "release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.dmg" Matcha
 
       - name: Generate Sparkle appcast
         env:
@@ -84,6 +85,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.zip
+            release-artifacts/Matcha-${{ steps.version.outputs.tag_name }}.dmg
             release-artifacts/appcast.xml
           generate_release_notes: true
