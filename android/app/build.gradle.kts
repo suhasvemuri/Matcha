@@ -68,6 +68,10 @@ dependencies {
   implementation(libs.androidx.glance.appwidget)
   implementation(libs.androidx.glance.material3)
 
+  // Phone -> watch favorites sync
+  implementation(libs.play.services.wearable)
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

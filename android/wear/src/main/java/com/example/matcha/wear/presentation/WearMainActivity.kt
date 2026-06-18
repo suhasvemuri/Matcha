@@ -27,6 +27,8 @@ import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import androidx.compose.ui.platform.LocalContext
+import com.example.matcha.wear.data.WearFavoritesStore
 import com.example.matcha.wear.data.WearMatch
 import com.example.matcha.wear.data.WearMatchState
 import com.example.matcha.wear.data.WearScoresApi
@@ -43,12 +45,16 @@ class WearMainActivity : ComponentActivity() {
 @Composable
 private fun WearApp() {
     val api = remember { WearScoresApi() }
+    val context = LocalContext.current
     var matches by remember { mutableStateOf<List<WearMatch>?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Refresh each time the watch face/app resumes.
+    // Refresh each time the app resumes, using favorites synced from the phone.
     LifecycleResumeEffect(Unit) {
-        scope.launch { matches = runCatching { api.fetchDefaults() }.getOrDefault(emptyList()) }
+        scope.launch {
+            val leagues = WearFavoritesStore.load(context)
+            matches = runCatching { api.fetchFavorites(leagues) }.getOrDefault(emptyList())
+        }
         onPauseOrDispose { }
     }
 

@@ -34,31 +34,41 @@ data class WearMatch(
     val statusDetail: String,
 )
 
-data class WearLeague(val name: String, val slug: String)
+data class WearLeague(val name: String, val slug: String, val espnSport: String = "soccer")
 
 object WearLeagues {
     val defaults = listOf(
         WearLeague("FIFA World Cup", "fifa.world"),
         WearLeague("Premier League", "ENG.1"),
         WearLeague("Champions League", "uefa.champions"),
-        WearLeague("La Liga", "ESP.1"),
+        WearLeague("IPL", "8048", "cricket"),
     )
+
+    /** Decodes `espnSport|slug|displayName` strings synced from the phone. */
+    fun decode(encoded: Collection<String>): List<WearLeague> =
+        encoded.mapNotNull { line ->
+            val parts = line.split("|")
+            if (parts.size >= 3) WearLeague(parts[2], parts[1], parts[0]) else null
+        }
 }
 
 class WearScoresApi(
     private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true },
 ) {
-    suspend fun fetchDefaults(): List<WearMatch> = coroutineScope {
-        WearLeagues.defaults
+    /** Fetch favorites synced from the phone, or the curated defaults. */
+    suspend fun fetchFavorites(leagues: List<WearLeague>): List<WearMatch> = coroutineScope {
+        leagues.ifEmpty { WearLeagues.defaults }
             .map { async(Dispatchers.IO) { fetchLeague(it) } }
             .awaitAll()
             .flatten()
             .sortedWith(compareBy({ it.state.order }, { it.id }))
     }
 
+    suspend fun fetchDefaults(): List<WearMatch> = fetchFavorites(WearLeagues.defaults)
+
     private suspend fun fetchLeague(league: WearLeague): List<WearMatch> = withContext(Dispatchers.IO) {
         val (start, end) = range()
-        val url = "https://site.api.espn.com/apis/site/v2/sports/soccer/${league.slug}/scoreboard?dates=$start-$end"
+        val url = "https://site.api.espn.com/apis/site/v2/sports/${league.espnSport}/${league.slug}/scoreboard?dates=$start-$end"
         val body = httpGet(url) ?: return@withContext emptyList()
         val board = runCatching { json.decodeFromString<Scoreboard>(body) }.getOrNull()
             ?: return@withContext emptyList()

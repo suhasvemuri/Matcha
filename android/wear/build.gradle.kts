@@ -54,6 +54,14 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Phone <-> watch data layer (favorites sync — future use)
+    // Phone <-> watch data layer (favorites sync)
     implementation(libs.play.services.wearable)
+
+    // Tiles
+    implementation("com.google.guava:guava:33.4.0-android")
+    implementation(libs.androidx.wear.tiles)
+    implementation(libs.androidx.wear.tiles.material)
+    implementation(libs.androidx.wear.protolayout)
+    implementation(libs.androidx.wear.protolayout.material)
+    implementation(libs.androidx.wear.protolayout.expression)
 }
