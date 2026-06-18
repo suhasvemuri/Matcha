@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Matcha</string>
+    <string name="widget_description">Live scores for your favorite teams and competitions</string>
 </resources>
