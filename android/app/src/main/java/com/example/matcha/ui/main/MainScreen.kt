@@ -4,6 +4,11 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -180,7 +185,17 @@ private fun ScoresContent(
                         }
                     }
                 } else {
-                    AnimatedContent(targetState = selectedMatch, label = "list-detail") { detail ->
+                    AnimatedContent(
+                        targetState = selectedMatch,
+                        transitionSpec = {
+                            if (targetState != null) {
+                                (slideInHorizontally(initialOffsetX = { it / 4 }) + fadeIn()) togetherWith fadeOut()
+                            } else {
+                                fadeIn() togetherWith (slideOutHorizontally(targetOffsetX = { it / 4 }) + fadeOut())
+                            }
+                        },
+                        label = "list-detail",
+                    ) { detail ->
                         if (detail == null) {
                             ScoresPane(displayState, onTap, accent)
                         } else {

@@ -102,6 +102,10 @@ fun MatchDetailContent(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+        if (extras.goals.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            GoalsSection(extras.goals)
+        }
         Spacer(Modifier.height(20.dp))
         Button(onClick = { onWatch(match) }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -137,6 +141,36 @@ fun MatchDetailContent(
         InfoRow("Kickoff", formatKickoff(match.kickoffEpochMs))
         InfoRow("Competition", match.leagueName)
         Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun GoalsSection(goals: List<com.example.matcha.data.GoalEvent>) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            goals.forEach { g ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+                ) {
+                    if (g.isHome) {
+                        Text("⚽", fontSize = 13.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(g.scorer, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                        Text("${g.minute}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text("${g.minute}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(g.scorer, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("⚽", fontSize = 13.sp)
+                    }
+                }
+            }
         }
     }
 }

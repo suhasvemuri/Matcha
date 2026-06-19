@@ -49,6 +49,7 @@ class PlayerActivity : ComponentActivity() {
     private var playerView: PlayerView? = null
     private var webView: WebView? = null
     private var spinner: ProgressBar? = null
+    private var topBar: android.view.View? = null
     private lateinit var root: FrameLayout
 
     private var nativePlaying = false
@@ -74,6 +75,7 @@ class PlayerActivity : ComponentActivity() {
             layoutParams = FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER)
         }
         root.addView(spinner)
+        addTopBar(intent.getStringExtra(EXTRA_TITLE) ?: "Live stream")
 
         if (isDirectStream(url)) {
             if (isSafeMediaUrl(url)) playNative(url, emptyMap()) else finish()
@@ -173,6 +175,50 @@ class PlayerActivity : ComponentActivity() {
         }, EXTRACT_TIMEOUT_MS)
     }
 
+    /** Translucent top bar: back, match title, and a Cast button. */
+    private fun addTopBar(title: String) {
+        val bar = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(10), dp(12), dp(10))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xAA000000.toInt(), 0x00000000),
+            )
+            layoutParams = FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP)
+            fitsSystemWindows = true
+        }
+        val back = android.widget.TextView(this).apply {
+            text = "✕" // ✕
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 20f
+            setPadding(dp(10), dp(4), dp(14), dp(4))
+            setOnClickListener { finish() }
+        }
+        val titleView = android.widget.TextView(this).apply {
+            text = title
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 16f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, WRAP, 1f)
+        }
+        bar.addView(back)
+        bar.addView(titleView)
+        runCatching {
+            val themed = android.view.ContextThemeWrapper(this, androidx.mediarouter.R.style.Theme_MediaRouter)
+            val cast = androidx.mediarouter.app.MediaRouteButton(themed).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(dp(40), dp(40))
+            }
+            com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(applicationContext, cast)
+            bar.addView(cast)
+        }
+        root.addView(bar)
+        topBar = bar
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
     // --- Picture-in-Picture -------------------------------------------------
 
     override fun onUserLeaveHint() {
@@ -190,6 +236,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerView?.useController = !isInPictureInPictureMode
+        topBar?.visibility = if (isInPictureInPictureMode) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private fun hideSystemBars() {

@@ -47,11 +47,15 @@ data class TeamFormation(
     val players: List<FormationPlayer>,
 )
 
+/** A goal in the match timeline. */
+data class GoalEvent(val minute: String, val scorer: String, val isHome: Boolean)
+
 data class MatchExtras(
     val stats: List<StatComparison> = emptyList(),
     val group: StandingGroup? = null,
     val homeFormation: TeamFormation? = null,
     val awayFormation: TeamFormation? = null,
+    val goals: List<GoalEvent> = emptyList(),
 )
 
 /**
@@ -71,18 +75,26 @@ class EspnDetailApi(
         val groupDeferred = async(Dispatchers.IO) { fetchGroup(league.slug, match) }
         val summary = summaryDeferred.await()
         MatchExtras(
-            stats = summary?.first ?: emptyList(),
+            stats = summary?.stats ?: emptyList(),
             group = groupDeferred.await(),
-            homeFormation = summary?.second,
-            awayFormation = summary?.third,
+            homeFormation = summary?.homeFormation,
+            awayFormation = summary?.awayFormation,
+            goals = summary?.goals ?: emptyList(),
         )
     }
+
+    private class SummaryData(
+        val stats: List<StatComparison>,
+        val homeFormation: TeamFormation?,
+        val awayFormation: TeamFormation?,
+        val goals: List<GoalEvent>,
+    )
 
     private fun fetchSummary(
         slug: String,
         eventId: String,
         match: Match,
-    ): Triple<List<StatComparison>, TeamFormation?, TeamFormation?>? {
+    ): SummaryData? {
         val url = "https://site.api.espn.com/apis/site/v2/sports/soccer/$slug/summary?event=$eventId"
         val body = httpGet(url) ?: return null
         val summary = runCatching { json.decodeFromString<Summary>(body) }.getOrNull() ?: return null
@@ -104,7 +116,19 @@ class EspnDetailApi(
         val homeRoster = summary.rosters.firstOrNull { (it.team.displayName ?: "").lowercase() == homeName }
             ?: summary.rosters.getOrNull(0)
         val awayRoster = summary.rosters.firstOrNull { it !== homeRoster }
-        return Triple(stats, homeRoster?.toFormation(), awayRoster?.toFormation())
+
+        val goals = summary.keyEvents
+            .filter { it.scoringPlay == true || it.type?.text == "Goal" }
+            .mapNotNull { ev ->
+                val scorer = ev.participants.firstOrNull()?.athlete?.displayName ?: return@mapNotNull null
+                GoalEvent(
+                    minute = ev.clock?.displayValue.orEmpty(),
+                    scorer = scorer,
+                    isHome = (ev.team?.displayName ?: "").lowercase() == homeName,
+                )
+            }
+
+        return SummaryData(stats, homeRoster?.toFormation(), awayRoster?.toFormation(), goals)
     }
 
     private fun fetchGroup(slug: String, match: Match): StandingGroup? {
@@ -179,7 +203,26 @@ class EspnDetailApi(
 private data class Summary(
     val boxscore: Boxscore = Boxscore(),
     val rosters: List<Roster> = emptyList(),
+    val keyEvents: List<KeyEvent> = emptyList(),
 )
+
+@Serializable
+private data class KeyEvent(
+    val type: KeyEventType? = null,
+    val scoringPlay: Boolean? = null,
+    val clock: KeyEventClock? = null,
+    val team: BoxTeamInfo? = null,
+    val participants: List<KeyEventParticipant> = emptyList(),
+)
+
+@Serializable
+private data class KeyEventType(val text: String? = null)
+
+@Serializable
+private data class KeyEventClock(val displayValue: String? = null)
+
+@Serializable
+private data class KeyEventParticipant(val athlete: Athlete? = null)
 
 @Serializable
 private data class Roster(
