@@ -1,6 +1,8 @@
 package com.example.matcha.ui.main
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +37,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +61,8 @@ import com.example.matcha.data.Match
 import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchTeam
 import com.example.matcha.data.streaming.StreamOption
+import com.example.matcha.ui.detail.MatchDetailContent
+import com.example.matcha.ui.detail.MatchDetailPlaceholder
 
 @Composable
 fun MainScreen(
@@ -64,8 +72,16 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val sheet by viewModel.streamSheet.collectAsStateWithLifecycle()
+    var selected by rememberSaveable(stateSaver = MatchIdSaver) { mutableStateOf<String?>(null) }
+
+    val selectedMatch = (state as? ScoresUiState.Success)?.groups
+        ?.flatMap { it.matches }?.firstOrNull { it.id == selected }
+
     ScoresContent(
         state = state,
+        selectedMatch = selectedMatch,
+        onSelect = { selected = it.id },
+        onClearSelection = { selected = null },
         onWatch = viewModel::showStreams,
         onOpenFavorites = { onItemClick(com.example.matcha.Favorites) },
         modifier = modifier,
@@ -75,48 +91,96 @@ fun MainScreen(
     }
 }
 
+private val MatchIdSaver = androidx.compose.runtime.saveable.Saver<String?, String>(
+    save = { it ?: "" },
+    restore = { it.ifEmpty { null } },
+)
+
 @Composable
 private fun ScoresContent(
     state: ScoresUiState,
+    selectedMatch: Match?,
+    onSelect: (Match) -> Unit,
+    onClearSelection: () -> Unit,
     onWatch: (Match) -> Unit,
     onOpenFavorites: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
-    Column(modifier.fillMaxSize()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-        ) {
-            Text(
-                text = "Matcha",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f),
-            )
-            FilledTonalIconButton(onClick = {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val twoPane = maxWidth >= 720.dp
+
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            ) {
+                Text(
+                    text = "Matcha",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f),
+                )
+                FilledTonalIconButton(onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onOpenFavorites()
+                }) {
+                    Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
+                }
+            }
+
+            val onTap: (Match) -> Unit = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onOpenFavorites()
-            }) {
-                Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
+                onSelect(it)
+            }
+
+            if (twoPane) {
+                Row(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(0.42f).fillMaxSize()) {
+                        ScoresPane(state, onTap)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.weight(0.58f).fillMaxSize(),
+                    ) {
+                        if (selectedMatch != null) {
+                            MatchDetailContent(selectedMatch, onWatch)
+                        } else {
+                            MatchDetailPlaceholder()
+                        }
+                    }
+                }
+            } else {
+                // Compact: list, or the detail overlaying it when a match is picked.
+                AnimatedContent(targetState = selectedMatch, label = "list-detail") { detail ->
+                    if (detail == null) {
+                        ScoresPane(state, onTap)
+                    } else {
+                        BackHandler(enabled = true, onBack = onClearSelection)
+                        MatchDetailContent(detail, onWatch)
+                    }
+                }
             }
         }
-        Crossfade(targetState = state::class, label = "scores") { _ ->
-            when (state) {
-                ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator() }
-                ScoresUiState.Empty -> CenteredBox {
-                    Text(
-                        "No matches in your favorites right now.\nPick teams and competitions to follow.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                is ScoresUiState.Success -> ScoresList(state.groups) { match ->
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onWatch(match)
-                }
+    }
+}
+
+@Composable
+private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit) {
+    Crossfade(targetState = state::class, label = "scores") { _ ->
+        when (state) {
+            ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator() }
+            ScoresUiState.Empty -> CenteredBox {
+                Text(
+                    "No matches in your favorites right now.\nPick teams and competitions to follow.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            is ScoresUiState.Success -> ScoresList(state.groups, onTap)
         }
     }
 }
