@@ -76,7 +76,7 @@ class PlayerActivity : ComponentActivity() {
         root.addView(spinner)
 
         if (isDirectStream(url)) {
-            playNative(url, emptyMap())
+            if (isSafeMediaUrl(url)) playNative(url, emptyMap()) else finish()
         } else {
             setupEmbedExtraction(url)
         }
@@ -148,7 +148,9 @@ class PlayerActivity : ComponentActivity() {
                     request: WebResourceRequest?,
                 ): WebResourceResponse? {
                     val u = request?.url?.toString()
-                    if (u != null && !extractionDone && u.contains(".m3u8") && !u.contains("/ad")) {
+                    if (u != null && !extractionDone && u.contains(".m3u8") && !u.contains("/ad") &&
+                        isSafeMediaUrl(u)
+                    ) {
                         extractionDone = true
                         val headers = request.requestHeaders ?: emptyMap()
                         main.post { playNative(u, headers) }
@@ -233,6 +235,33 @@ class PlayerActivity : ComponentActivity() {
 
         private val DIRECT = Regex("""\.(m3u8|mpd|mp4|ts|m4s)(\?.*)?$""", RegexOption.IGNORE_CASE)
         fun isDirectStream(url: String): Boolean = DIRECT.containsMatchIn(url)
+
+        /**
+         * Guards against device-side SSRF via an intercepted URL: only play
+         * media over HTTPS from a public host (never loopback / private /
+         * link-local addresses that could reach internal services).
+         */
+        fun isSafeMediaUrl(url: String): Boolean {
+            val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+            if (!uri.scheme.equals("https", ignoreCase = true)) return false
+            val host = uri.host?.lowercase()?.trim('[', ']')?.ifBlank { null } ?: return false
+            return !isPrivateOrLocalHost(host)
+        }
+
+        private fun isPrivateOrLocalHost(host: String): Boolean {
+            if (host == "localhost" || host.endsWith(".local") || host.endsWith(".internal")) return true
+            // IPv4 loopback / private / link-local
+            if (host == "0.0.0.0" || host.startsWith("127.") || host.startsWith("10.") ||
+                host.startsWith("192.168.") || host.startsWith("169.254.")
+            ) return true
+            if (host.startsWith("172.")) {
+                val second = host.split(".").getOrNull(1)?.toIntOrNull()
+                if (second != null && second in 16..31) return true
+            }
+            // IPv6 loopback / unique-local / link-local
+            if (host == "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) return true
+            return false
+        }
 
         fun start(context: Context, url: String, title: String) {
             context.startActivity(
