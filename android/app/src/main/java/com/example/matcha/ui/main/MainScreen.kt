@@ -387,6 +387,57 @@ private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit, ac
                 }
             }
         }
+        item(key = "standings") {
+            FeedStandings(groups.firstOrNull()?.league, accent)
+        }
+    }
+}
+
+@Composable
+private fun FeedStandings(league: com.example.matcha.data.League?, accent: Color) {
+    if (league == null || league.espnSport != "soccer") return
+    val groups by androidx.compose.runtime.produceState(
+        initialValue = emptyList<com.example.matcha.data.StandingGroup>(), league.id,
+    ) {
+        value = runCatching { com.example.matcha.data.EspnStandingsApi().fetchAll(league) }.getOrDefault(emptyList())
+    }
+    if (groups.isEmpty()) return
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+            Spacer(Modifier.width(8.dp))
+            Text("STANDINGS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        groups.forEach { g -> StandingsCard(g) }
+    }
+}
+
+@Composable
+private fun StandingsCard(group: com.example.matcha.data.StandingGroup) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(group.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 6.dp))
+            Row(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                Text("Team", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                listOf("P", "W", "D", "L", "GD", "PTS").forEach {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(if (it == "PTS" || it == "GD") 32.dp else 22.dp))
+                }
+            }
+            group.rows.forEach { r ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Crest(r.logoUrl, Modifier.size(16.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(r.teamName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
+                    listOf(r.played.toString(), r.win.toString(), r.draw.toString(), r.loss.toString(), r.goalDiff, r.points.toString()).forEachIndexed { i, v ->
+                        Text(v, style = MaterialTheme.typography.bodySmall, fontWeight = if (i == 5) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurface, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(if (i >= 4) 32.dp else 22.dp))
+                    }
+                }
+            }
+        }
     }
 }
 
