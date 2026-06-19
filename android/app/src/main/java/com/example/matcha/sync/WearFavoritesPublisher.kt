@@ -5,6 +5,7 @@ import com.example.matcha.data.League
 import com.example.matcha.data.Leagues
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -31,6 +32,9 @@ object WearFavoritesPublisher {
             dataMap.putLong("ts", encoded.hashCode().toLong())
         }.asPutDataRequest().setUrgent()
 
-        runCatching { Wearable.getDataClient(context).putDataItem(request).await() }
+        // Bounded so a missing/slow Wear/GMS stack can never hang the caller.
+        withTimeoutOrNull(5_000) {
+            runCatching { Wearable.getDataClient(context).putDataItem(request).await() }
+        }
     }
 }
