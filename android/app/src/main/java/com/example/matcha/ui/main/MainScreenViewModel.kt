@@ -91,11 +91,14 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Spin up the live-score foreground service when something is in play. */
     private fun startLiveTrackingIfNeeded() {
-        val hasLive = repository.leagueMatches.value
-            .any { group -> group.matches.any { it.state == MatchState.LIVE } }
-        if (hasLive) {
+        val all = repository.leagueMatches.value.flatMap { it.matches }
+        if (all.any { it.state == MatchState.LIVE }) {
             LiveScoreService.start(getApplication())
         }
+        // Schedule kickoff reminders for upcoming favorites.
+        com.example.matcha.notifications.MatchReminders.schedule(
+            getApplication(), all, System.currentTimeMillis(),
+        )
     }
 
     fun showStreams(match: Match) {

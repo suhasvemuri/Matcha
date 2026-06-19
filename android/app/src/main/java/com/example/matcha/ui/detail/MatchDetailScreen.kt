@@ -116,6 +116,10 @@ fun MatchDetailContent(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+        if (match.sport == com.example.matcha.data.Sport.CRICKET) {
+            Spacer(Modifier.height(14.dp))
+            CricketInnings(match)
+        }
         if (extras.goals.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             GoalsSection(extras.goals)
@@ -155,6 +159,27 @@ fun MatchDetailContent(
         InfoRow("Kickoff", formatKickoff(match.kickoffEpochMs))
         InfoRow("Competition", match.leagueName)
         Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun CricketInnings(match: Match) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            listOf(match.home, match.away).forEach { team ->
+                if (team.score.isNullOrBlank()) return@forEach
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    com.example.matcha.ui.common.Crest(team.logoUrl, Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(team.shortName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.width(70.dp), maxLines = 1)
+                    Text(team.score, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }

@@ -14,7 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Brush
 import androidx.core.content.ContextCompat
 import com.example.matcha.theme.MatchaGradientBottom
@@ -32,8 +34,10 @@ class MainActivity : ComponentActivity() {
     maybeRequestNotificationPermission()
     enableEdgeToEdge()
     setContent {
-      val settings by com.example.matcha.data.SettingsStore(this)
-        .settings.collectAsState(initial = com.example.matcha.data.MatchaSettings())
+      val store = remember { com.example.matcha.data.SettingsStore(this) }
+      val settings by store.settings.collectAsState(initial = com.example.matcha.data.MatchaSettings())
+      val onboarded by store.onboarded.collectAsState(initial = true)
+      val scope = androidx.compose.runtime.rememberCoroutineScope()
       val dark = when (settings.themeMode) {
         com.example.matcha.data.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
         com.example.matcha.data.ThemeMode.DARK -> true
@@ -41,7 +45,13 @@ class MainActivity : ComponentActivity() {
       }
       MatchaTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-          MainNavigation(startRoute = intent?.data?.host)
+          if (!onboarded) {
+            com.example.matcha.ui.onboarding.OnboardingScreen(
+              onDone = { scope.launch { store.setOnboarded() } },
+            )
+          } else {
+            MainNavigation(startRoute = intent?.data?.host)
+          }
         }
       }
     }

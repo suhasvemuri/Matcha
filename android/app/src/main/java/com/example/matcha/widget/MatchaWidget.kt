@@ -24,6 +24,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -63,24 +64,24 @@ class MatchaWidget : GlanceAppWidget() {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(GlanceTheme.colors.widgetBackground)
-                .cornerRadius(16.dp)
-                .padding(12.dp)
+                .background(ColorProvider(Color(0xFF0B140E)))
+                .cornerRadius(20.dp)
+                .padding(14.dp)
                 .clickable(actionStartActivity(ComponentName(LocalContext.current, MainActivity::class.java))),
         ) {
-            Text(
-                text = "Matcha",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = GlanceTheme.colors.onSurface,
-                ),
-            )
-            Spacer(GlanceModifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(ColorProvider(Accent))) {}
+                Spacer(GlanceModifier.width(6.dp))
+                Text(
+                    text = "Matcha",
+                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White)),
+                )
+            }
+            Spacer(GlanceModifier.height(8.dp))
             if (matches.isEmpty()) {
                 Text(
                     text = "No favorite matches right now",
-                    style = TextStyle(fontSize = 12.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color(0xFF9AA89E))),
                 )
             } else {
                 LazyColumn {
@@ -94,34 +95,37 @@ class MatchaWidget : GlanceAppWidget() {
     private fun WidgetMatchRow(match: Match) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = GlanceModifier.fillMaxWidth().padding(vertical = 4.dp),
+            modifier = GlanceModifier.fillMaxWidth().padding(bottom = 6.dp)
+                .background(ColorProvider(Color(0xFF18271D))).cornerRadius(12.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         ) {
             Column(modifier = GlanceModifier.defaultWeight()) {
-                Text(
-                    text = "${match.home.abbreviation.ifBlank { match.home.shortName }}  ${match.home.score ?: ""}",
-                    style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurface),
-                )
-                Text(
-                    text = "${match.away.abbreviation.ifBlank { match.away.shortName }}  ${match.away.score ?: ""}",
-                    style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurface),
-                )
+                WidgetTeamLine(match.home.abbreviation.ifBlank { match.home.shortName }, match.home.score, match.state)
+                Spacer(GlanceModifier.height(3.dp))
+                WidgetTeamLine(match.away.abbreviation.ifBlank { match.away.shortName }, match.away.score, match.state)
             }
             Spacer(GlanceModifier.width(8.dp))
-            Box(
-                contentAlignment = Alignment.CenterEnd,
-                modifier = GlanceModifier.width(56.dp).wrapContentHeight(),
-            ) {
+            Box(contentAlignment = Alignment.CenterEnd, modifier = GlanceModifier.width(54.dp).wrapContentHeight()) {
                 Text(
                     text = match.statusLabel(),
                     style = TextStyle(
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (match.state == MatchState.LIVE)
-                            ColorProvider(Color(0xFFE5484D))
-                        else GlanceTheme.colors.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        color = if (match.state == MatchState.LIVE) ColorProvider(Accent) else ColorProvider(Color(0xFF9AA89E)),
                     ),
                 )
             }
+        }
+    }
+
+    @Composable
+    private fun WidgetTeamLine(name: String, score: String?, state: MatchState) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = GlanceModifier.fillMaxWidth()) {
+            Text(name, style = TextStyle(fontSize = 13.sp, color = ColorProvider(Color.White)), modifier = GlanceModifier.defaultWeight())
+            Text(
+                text = if (state == MatchState.UPCOMING) "" else (score?.substringBefore(" (")?.trim() ?: "0"),
+                style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White)),
+            )
         }
     }
 
@@ -133,5 +137,6 @@ class MatchaWidget : GlanceAppWidget() {
 
     companion object {
         private const val MAX_ROWS = 8
+        private val Accent = Color(0xFF6FD66F)
     }
 }

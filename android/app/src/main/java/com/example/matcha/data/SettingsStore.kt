@@ -25,6 +25,13 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val THEME = stringPreferencesKey("theme_mode")
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
+        val ONBOARDED = booleanPreferencesKey("onboarded")
+    }
+
+    val onboarded: Flow<Boolean> = context.settingsDataStore.data.map { it[Keys.ONBOARDED] ?: false }
+
+    suspend fun setOnboarded() {
+        context.settingsDataStore.edit { it[Keys.ONBOARDED] = true }
     }
 
     val settings: Flow<MatchaSettings> = context.settingsDataStore.data.map { p ->
