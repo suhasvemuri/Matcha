@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,13 +112,16 @@ private fun ScoresContent(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
+    var tab by rememberSaveable { mutableStateOf(DateTab.TODAY) }
+    val displayState = remember(state, tab) { filterByDate(state, tab) }
+
     BoxWithConstraints(modifier.fillMaxSize()) {
         val twoPane = maxWidth >= 720.dp
 
         Column(Modifier.fillMaxSize()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             ) {
                 Text(
                     text = "Matcha",
@@ -134,6 +138,11 @@ private fun ScoresContent(
                 }
             }
 
+            DateTabRow(selected = tab, onSelect = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                tab = it
+            })
+
             val onTap: (Match) -> Unit = {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 onSelect(it)
@@ -142,7 +151,7 @@ private fun ScoresContent(
             if (twoPane) {
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(0.42f).fillMaxSize()) {
-                        ScoresPane(state, onTap)
+                        ScoresPane(displayState, onTap)
                     }
                     Spacer(Modifier.width(12.dp))
                     Surface(
@@ -161,7 +170,7 @@ private fun ScoresContent(
                 // Compact: list, or the detail overlaying it when a match is picked.
                 AnimatedContent(targetState = selectedMatch, label = "list-detail") { detail ->
                     if (detail == null) {
-                        ScoresPane(state, onTap)
+                        ScoresPane(displayState, onTap)
                     } else {
                         BackHandler(enabled = true, onBack = onClearSelection)
                         MatchDetailContent(detail, onWatch)
@@ -170,6 +179,51 @@ private fun ScoresContent(
             }
         }
     }
+}
+
+enum class DateTab(val label: String) { YESTERDAY("Yesterday"), TODAY("Today"), UPCOMING("Upcoming") }
+
+@Composable
+private fun DateTabRow(selected: DateTab, onSelect: (DateTab) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+    ) {
+        DateTab.entries.forEach { t ->
+            val active = t == selected
+            Text(
+                text = t.label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                color = if (active) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { onSelect(t) },
+            )
+        }
+    }
+}
+
+/** Bucket matches by kickoff date relative to today (device timezone). */
+private fun filterByDate(state: ScoresUiState, tab: DateTab): ScoresUiState {
+    if (state !is ScoresUiState.Success) return state
+    val cal = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val todayStart = cal.timeInMillis
+    val tomorrowStart = todayStart + 24L * 60 * 60 * 1000
+
+    fun bucket(m: Match): DateTab = when {
+        m.kickoffEpochMs <= 0 -> DateTab.TODAY
+        m.kickoffEpochMs < todayStart -> DateTab.YESTERDAY
+        m.kickoffEpochMs < tomorrowStart -> DateTab.TODAY
+        else -> DateTab.UPCOMING
+    }
+
+    val filtered = state.groups
+        .map { g -> g.copy(matches = g.matches.filter { bucket(it) == tab }) }
+        .filter { it.matches.isNotEmpty() }
+    return if (filtered.isEmpty()) ScoresUiState.Empty else ScoresUiState.Success(filtered)
 }
 
 @Composable
