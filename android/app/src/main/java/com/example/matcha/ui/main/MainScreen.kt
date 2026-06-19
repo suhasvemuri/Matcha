@@ -84,6 +84,9 @@ import com.example.matcha.ui.detail.MatchDetailPlaceholder
 /** Favorite team terms (lowercased) for the My-Teams star, avoiding param threading. */
 val LocalFavoriteTeams = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
 
+/** Favorite league ids (for the F1 races section). */
+val LocalFavoriteLeagues = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
+
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -94,12 +97,16 @@ fun MainScreen(
     val sheet by viewModel.streamSheet.collectAsStateWithLifecycle()
     val refreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val favoriteTeams by viewModel.favoriteTeams.collectAsStateWithLifecycle()
+    val favoriteLeagues by viewModel.favoriteLeagues.collectAsStateWithLifecycle()
     var selected by rememberSaveable(stateSaver = MatchIdSaver) { mutableStateOf<String?>(null) }
 
     val selectedMatch = (state as? ScoresUiState.Success)?.groups
         ?.flatMap { it.matches }?.firstOrNull { it.id == selected }
 
-    androidx.compose.runtime.CompositionLocalProvider(LocalFavoriteTeams provides favoriteTeams) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalFavoriteTeams provides favoriteTeams,
+        LocalFavoriteLeagues provides favoriteLeagues,
+    ) {
     ScoresContent(
         state = state,
         selectedMatch = selectedMatch,
@@ -333,12 +340,18 @@ private fun ScoresPane(
         Crossfade(targetState = state::class, label = "scores") { _ ->
             when (state) {
                 ScoresUiState.Loading -> SkeletonList()
-                ScoresUiState.Empty -> CenteredBox {
-                    Text(
-                        "No matches in your favorites right now.\nPick teams and competitions to follow.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                ScoresUiState.Empty -> {
+                    if ("FORMULA1" in LocalFavoriteLeagues.current) {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            item { F1Section(accent) }
+                        }
+                    } else CenteredBox {
+                        Text(
+                            "No matches in your favorites right now.\nPick teams and competitions to follow.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 is ScoresUiState.Success -> ScoresList(state.groups, onTap, accent)
             }
@@ -395,8 +408,55 @@ private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit, ac
                 }
             }
         }
+        item(key = "f1") { F1Section(accent) }
         item(key = "standings") {
             FeedStandings(groups.firstOrNull()?.league, accent)
+        }
+    }
+}
+
+@Composable
+private fun F1Section(accent: Color) {
+    if ("FORMULA1" !in LocalFavoriteLeagues.current) return
+    val races by androidx.compose.runtime.produceState(
+        initialValue = emptyList<com.example.matcha.data.RaceEvent>(), Unit,
+    ) {
+        value = runCatching { com.example.matcha.data.EspnF1Api().fetchRaces() }.getOrDefault(emptyList())
+    }
+    if (races.isEmpty()) return
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 18.dp, bottom = 6.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+            Spacer(Modifier.width(8.dp))
+            Text("FORMULA 1", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        }
+        races.forEach { RaceCard(it) }
+    }
+}
+
+@Composable
+private fun RaceCard(race: com.example.matcha.data.RaceEvent) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(race.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            race.circuit?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            Text(race.statusDetail, style = MaterialTheme.typography.labelMedium, color = if (race.state == MatchState.LIVE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+            if (race.results.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                race.results.take(3).forEach { d ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("P${d.position}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(34.dp))
+                        Text(d.driver, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1)
+                        d.team?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+                    }
+                }
+            }
         }
     }
 }

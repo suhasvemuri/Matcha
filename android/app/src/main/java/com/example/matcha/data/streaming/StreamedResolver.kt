@@ -118,6 +118,7 @@ class StreamedResolver(
     private fun sportCategory(sport: Sport): String = when (sport) {
         Sport.SOCCER -> "football"
         Sport.CRICKET -> "cricket"
+        Sport.F1 -> "motorsports"
     }
 
     private fun matchPaths(match: Match): List<String> = buildList {
@@ -130,6 +131,7 @@ class StreamedResolver(
     private fun sportPath(sport: Sport): String = when (sport) {
         Sport.SOCCER -> "/api/matches/football"
         Sport.CRICKET -> "/api/matches/cricket"
+        Sport.F1 -> "/api/matches/formula-1"
     }
 
     private fun normalizeUrl(raw: String?, base: String): String? {

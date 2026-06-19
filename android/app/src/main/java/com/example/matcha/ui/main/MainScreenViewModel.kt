@@ -39,6 +39,11 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
             .map { names -> names.map { it.lowercase() }.toSet() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
+    /** Favorite league ids (e.g. for the F1 races section). */
+    val favoriteLeagues: StateFlow<Set<String>> =
+        favorites.favoriteLeagueIds
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     /** Combined favorites snapshot, re-fetched whenever the user changes them. */
     private val favoriteSnapshot: StateFlow<FavoriteSnapshot> =
         combine(favorites.favoriteLeagueIds, favorites.favoriteTeamNames) { leagues, teams ->

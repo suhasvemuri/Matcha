@@ -1,9 +1,10 @@
 package com.example.matcha.data
 
-/** Sports Matcha can show. Cricket uses a different upstream and is added later. */
+/** Sports Matcha can show. */
 enum class Sport(val displayName: String) {
     SOCCER("Football"),
     CRICKET("Cricket"),
+    F1("Formula 1"),
 }
 
 /**
@@ -59,6 +60,8 @@ object Leagues {
         cricket("IPL", "IPL", "8048", "India"),
         cricket("CWC", "ICC World Cup", "8039", "International"),
         cricket("BBL", "Big Bash League", "8044", "Australia"),
+        // Formula 1 (races, not team matches)
+        League("FORMULA1", "Formula 1", Sport.F1, "racing", "f1", "International"),
     )
 
     private val byId = all.associateBy { it.id }
