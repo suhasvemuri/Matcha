@@ -31,12 +31,9 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       MatchaTheme {
-        Surface(
-          modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(MatchaGradientTop, MatchaGradientBottom))),
-          color = androidx.compose.ui.graphics.Color.Transparent,
-        ) { MainNavigation() }
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+          MainNavigation()
+        }
       }
     }
   }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -66,6 +68,7 @@ import com.example.matcha.data.Match
 import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchTeam
 import com.example.matcha.data.streaming.StreamOption
+import com.example.matcha.theme.CompetitionThemes
 import com.example.matcha.ui.detail.MatchDetailContent
 import com.example.matcha.ui.detail.MatchDetailPlaceholder
 
@@ -117,68 +120,107 @@ private fun ScoresContent(
     var tab by rememberSaveable { mutableStateOf(DateTab.TODAY) }
     val displayState = remember(state, tab) { filterByDate(state, tab) }
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val twoPane = maxWidth >= 720.dp
+    // Theme the canvas by the dominant competition on screen (Apple Sports style).
+    val dominant = (displayState as? ScoresUiState.Success)?.groups?.firstOrNull()
+    val theme = CompetitionThemes.forLeague(dominant?.league?.id)
+    val accent = theme.accent
 
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-            ) {
-                Text(
-                    text = "Matcha",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
+    Box(
+        modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                0f to theme.gradientTop,
+                0.42f to theme.gradientBottom,
+                1f to MaterialTheme.colorScheme.background,
+            ),
+        ),
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 18.dp)) {
+            val twoPane = maxWidth >= 720.dp
+
+            Column(Modifier.fillMaxSize()) {
+                ScoresHeader(
+                    competition = dominant?.league?.displayName,
+                    accent = accent,
+                    onOpenFavorites = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenFavorites()
+                    },
                 )
-                FilledTonalIconButton(onClick = {
+
+                DateTabRow(selected = tab, accent = accent, onSelect = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onOpenFavorites()
-                }) {
-                    Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
+                    tab = it
+                })
+
+                val onTap: (Match) -> Unit = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onSelect(it)
                 }
-            }
 
-            DateTabRow(selected = tab, onSelect = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                tab = it
-            })
-
-            val onTap: (Match) -> Unit = {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onSelect(it)
-            }
-
-            if (twoPane) {
-                Row(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(0.42f).fillMaxSize()) {
-                        ScoresPane(displayState, onTap)
+                if (twoPane) {
+                    Row(Modifier.fillMaxSize()) {
+                        Box(Modifier.weight(0.42f).fillMaxSize()) {
+                            ScoresPane(displayState, onTap, accent)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            shape = MaterialTheme.shapes.extraLarge,
+                            modifier = Modifier.weight(0.58f).fillMaxSize(),
+                        ) {
+                            if (selectedMatch != null) {
+                                MatchDetailContent(selectedMatch, onWatch, onOpenBracket = bracketCallback(selectedMatch, onOpenBracket))
+                            } else {
+                                MatchDetailPlaceholder()
+                            }
+                        }
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.weight(0.58f).fillMaxSize(),
-                    ) {
-                        if (selectedMatch != null) {
-                            MatchDetailContent(selectedMatch, onWatch, onOpenBracket = bracketCallback(selectedMatch, onOpenBracket))
+                } else {
+                    AnimatedContent(targetState = selectedMatch, label = "list-detail") { detail ->
+                        if (detail == null) {
+                            ScoresPane(displayState, onTap, accent)
                         } else {
-                            MatchDetailPlaceholder()
+                            BackHandler(enabled = true, onBack = onClearSelection)
+                            MatchDetailContent(detail, onWatch, onOpenBracket = bracketCallback(detail, onOpenBracket))
                         }
                     }
                 }
-            } else {
-                // Compact: list, or the detail overlaying it when a match is picked.
-                AnimatedContent(targetState = selectedMatch, label = "list-detail") { detail ->
-                    if (detail == null) {
-                        ScoresPane(displayState, onTap)
-                    } else {
-                        BackHandler(enabled = true, onBack = onClearSelection)
-                        MatchDetailContent(detail, onWatch, onOpenBracket = bracketCallback(detail, onOpenBracket))
-                    }
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
+    ) {
+        Text(
+            text = "Matcha",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Spacer(Modifier.weight(1f))
+        competition?.let {
+            Surface(
+                color = accent.copy(alpha = 0.18f),
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier.padding(end = 8.dp),
+            ) {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accent,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        }
+        FilledTonalIconButton(onClick = onOpenFavorites) {
+            Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
         }
     }
 }
@@ -192,21 +234,28 @@ private fun bracketCallback(match: Match, onOpenBracket: (String) -> Unit): ((St
     if (match.leagueId in BRACKET_LEAGUES) onOpenBracket else null
 
 @Composable
-private fun DateTabRow(selected: DateTab, onSelect: (DateTab) -> Unit) {
+private fun DateTabRow(selected: DateTab, accent: Color, onSelect: (DateTab) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
     ) {
         DateTab.entries.forEach { t ->
             val active = t == selected
-            Text(
-                text = t.label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                color = if (active) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clickable { onSelect(t) },
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = t.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                    color = if (active) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { onSelect(t) },
+                )
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    Modifier.height(3.dp).width(if (active) 20.dp else 0.dp)
+                        .clip(CircleShape).background(accent),
+                )
+            }
         }
     }
 }
@@ -235,10 +284,10 @@ private fun filterByDate(state: ScoresUiState, tab: DateTab): ScoresUiState {
 }
 
 @Composable
-private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit) {
+private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit, accent: Color) {
     Crossfade(targetState = state::class, label = "scores") { _ ->
         when (state) {
-            ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator() }
+            ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator(color = accent) }
             ScoresUiState.Empty -> CenteredBox {
                 Text(
                     "No matches in your favorites right now.\nPick teams and competitions to follow.",
@@ -246,38 +295,44 @@ private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            is ScoresUiState.Success -> ScoresList(state.groups, onTap)
+            is ScoresUiState.Success -> ScoresList(state.groups, onTap, accent)
         }
     }
 }
 
 @Composable
-private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit, accent: Color) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+    ) {
         groups.forEach { group ->
             item(key = "header-${group.league.id}") {
-                LeagueHeader(group, Modifier.animateItem())
+                LeagueHeader(group, accent, Modifier.animateItem())
             }
             items(group.matches, key = { it.id }) { match ->
-                MatchRow(match, onClick = { onWatch(match) }, modifier = Modifier.animateItem())
+                MatchRow(match, accent, onClick = { onWatch(match) }, modifier = Modifier.animateItem())
             }
         }
     }
 }
 
 @Composable
-private fun LeagueHeader(group: LeagueMatches, modifier: Modifier = Modifier) {
-    Text(
-        text = group.league.displayName.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(top = 12.dp, bottom = 2.dp),
-    )
+private fun LeagueHeader(group: LeagueMatches, accent: Color, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(top = 16.dp, bottom = 6.dp)) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = group.league.displayName.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 @Composable
-private fun MatchRow(match: Match, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun MatchRow(match: Match, accent: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val homeScore = leadingScore(match.home.score)
     val awayScore = leadingScore(match.away.score)
     val decided = match.state != MatchState.UPCOMING && homeScore != null && awayScore != null
@@ -285,18 +340,18 @@ private fun MatchRow(match: Match, onClick: () -> Unit, modifier: Modifier = Mod
     val awayDim = decided && awayScore!! < homeScore!!
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.large,
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         // Apple Sports horizontal card: crest+abbr | score | center status | score | abbr+crest
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
         ) {
             TeamBadge(match.home, alignStart = true, modifier = Modifier.weight(1f))
             ScoreText(match, match.home, dim = homeDim)
-            CenterStatus(match)
+            CenterStatus(match, accent)
             ScoreText(match, match.away, dim = awayDim)
             TeamBadge(match.away, alignStart = false, modifier = Modifier.weight(1f))
         }
@@ -311,14 +366,22 @@ private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier =
         modifier = modifier,
     ) {
         val label = team.abbreviation.ifBlank { team.shortName }
+        val name = @Composable {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+        }
+        val crest = @Composable {
+            AsyncImage(team.logoUrl, null, Modifier.size(38.dp), contentScale = ContentScale.Fit)
+        }
         if (alignStart) {
-            AsyncImage(team.logoUrl, null, Modifier.size(30.dp), contentScale = ContentScale.Fit)
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            crest(); Spacer(Modifier.width(12.dp)); name()
         } else {
-            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-            Spacer(Modifier.width(8.dp))
-            AsyncImage(team.logoUrl, null, Modifier.size(30.dp), contentScale = ContentScale.Fit)
+            name(); Spacer(Modifier.width(12.dp)); crest()
         }
     }
 }
@@ -331,19 +394,19 @@ private fun ScoreText(match: Match, team: MatchTeam, dim: Boolean) {
     }
     Text(
         text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" },
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.ExtraBold,
         maxLines = 1,
         color = if (dim) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(horizontal = 10.dp),
+        modifier = Modifier.padding(horizontal = 12.dp),
     )
 }
 
 @Composable
-private fun CenterStatus(match: Match) {
-    Box(Modifier.widthIn(min = 54.dp), contentAlignment = Alignment.Center) {
+private fun CenterStatus(match: Match, accent: Color) {
+    Box(Modifier.widthIn(min = 58.dp), contentAlignment = Alignment.Center) {
         when (match.state) {
-            MatchState.LIVE -> LiveStatus(match.statusDetail.ifBlank { "LIVE" })
+            MatchState.LIVE -> LiveStatus(match.statusDetail.ifBlank { "LIVE" }, accent)
             MatchState.FINAL -> Text(
                 "Final",
                 style = MaterialTheme.typography.labelMedium,
@@ -365,7 +428,7 @@ private fun CenterStatus(match: Match) {
 }
 
 @Composable
-private fun LiveStatus(label: String) {
+private fun LiveStatus(label: String, accent: Color) {
     val transition = rememberInfiniteTransition(label = "live")
     val pulse by transition.animateFloat(
         initialValue = 0.4f,
@@ -373,17 +436,14 @@ private fun LiveStatus(label: String) {
         animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
         label = "pulse",
     )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(7.dp).clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = pulse)),
-        )
-        Spacer(Modifier.width(4.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(accent.copy(alpha = pulse)))
+        Spacer(Modifier.height(3.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = accent,
             maxLines = 1,
         )
     }

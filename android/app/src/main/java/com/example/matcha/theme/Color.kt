@@ -54,21 +54,22 @@ val MatchaDarkColors = darkColorScheme(
     onError = Color(0xFF000000),
     errorContainer = Color(0xFF3A0E0E),
     onErrorContainer = Color(0xFFFFB4AB),
-    // Apple Sports themes the canvas by competition; Matcha's brand is green.
-    background = Color(0xFF06140C),
+    // Clean neutral-dark base — the per-competition gradient supplies the color.
+    background = Color(0xFF070809),
     onBackground = Color(0xFFFFFFFF),
-    surface = Color(0xFF06140C),
-    onSurface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF18271D),
-    onSurfaceVariant = Color(0xFF9AA89E), // muted green-gray secondary
-    outline = Color(0xFF38463C),
-    surfaceContainerLowest = Color(0xFF030C07),
-    surfaceContainerLow = Color(0xFF0E1C13),
-    surfaceContainer = Color(0xFF16241B),
-    surfaceContainerHigh = Color(0xFF1F2E24),
-    surfaceContainerHighest = Color(0xFF2A3A2F),
+    surface = Color(0xFF070809),
+    onSurface = Color(0xFFF5F6F7),
+    // Cards: a clean, slightly translucent-feeling elevated surface.
+    surfaceVariant = Color(0xFF191B1F),
+    onSurfaceVariant = Color(0xFF9BA1A8), // neutral Apple-gray secondary
+    outline = Color(0xFF34373D),
+    surfaceContainerLowest = Color(0xFF050608),
+    surfaceContainerLow = Color(0xFF121418),
+    surfaceContainer = Color(0xFF191B1F),
+    surfaceContainerHigh = Color(0xFF24272D),
+    surfaceContainerHighest = Color(0xFF30343B),
 )
 
-/** Gradient colors for the Apple Sports-style themed canvas (top → bottom). */
+/** Default gradient (brand green); overridden per-competition at runtime. */
 val MatchaGradientTop = Color(0xFF0E3A22)
-val MatchaGradientBottom = Color(0xFF05100A)
+val MatchaGradientBottom = Color(0xFF05070A)

@@ -64,26 +64,45 @@ fun MatchDetailContent(
         value = runCatching { EspnDetailApi().fetch(match) }.getOrDefault(MatchExtras())
     }
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = match.leagueName.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(4.dp))
-        StatusLine(match)
-        Spacer(Modifier.height(24.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            TeamCrest(match.home, Modifier.weight(1f))
-            ScoreBlock(match)
-            TeamCrest(match.away, Modifier.weight(1f))
+        // Team-color gradient header (Apple Sports themed match header).
+        val homeColor = match.home.colorArgb?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
+        val awayColor = match.away.colorArgb?.let { Color(it) } ?: MaterialTheme.colorScheme.tertiary
+        Box(
+            Modifier.fillMaxWidth().background(
+                androidx.compose.ui.graphics.Brush.linearGradient(
+                    listOf(homeColor.copy(alpha = 0.55f), MaterialTheme.colorScheme.surface.copy(alpha = 0.2f), awayColor.copy(alpha = 0.55f)),
+                ),
+            ),
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 24.dp, start = 20.dp, end = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = match.leagueName.uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                )
+                Spacer(Modifier.height(4.dp))
+                StatusLine(match)
+                Spacer(Modifier.height(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    TeamCrest(match.home, Modifier.weight(1f))
+                    ScoreBlock(match)
+                    TeamCrest(match.away, Modifier.weight(1f))
+                }
+            }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+        Spacer(Modifier.height(20.dp))
         Button(onClick = { onWatch(match) }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.PlayArrow, contentDescription = null)
             Spacer(Modifier.size(8.dp))
@@ -118,6 +137,7 @@ fun MatchDetailContent(
         InfoRow("Kickoff", formatKickoff(match.kickoffEpochMs))
         InfoRow("Competition", match.leagueName)
         Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
