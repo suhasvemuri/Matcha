@@ -351,13 +351,13 @@ private fun StreamSheet(state: StreamSheetState, onDismiss: () -> Unit) {
                 )
 
                 else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val title = "${state.match.home.name} vs ${state.match.away.name}"
                     state.options.forEach { option ->
                         StreamOptionRow(option) {
+                            // Play in the in-app player (WebView for embeds,
+                            // ExoPlayer + Cast for direct streams).
                             runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, option.url.toUri())
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
+                                com.example.matcha.player.PlayerActivity.start(context, option.url, title)
                             }
                         }
                     }

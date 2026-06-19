@@ -72,6 +72,13 @@ dependencies {
   implementation(libs.play.services.wearable)
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
+  // In-app stream player (ExoPlayer for direct streams) + Cast
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.exoplayer.hls)
+  implementation(libs.androidx.media3.ui)
+  implementation(libs.androidx.media3.cast)
+  implementation(libs.play.services.cast.framework)
+
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

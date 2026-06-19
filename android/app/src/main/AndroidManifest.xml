@@ -40,6 +40,18 @@
             android:name=".notifications.LiveScoreService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <activity
+            android:name=".player.PlayerActivity"
+            android:exported="false"
+            android:supportsPictureInPicture="true"
+            android:launchMode="singleTop"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|keyboard"
+            android:theme="@style/Theme.Matcha.Player" />
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.example.matcha.player.CastOptionsProvider" />
     </application>
 
 </manifest>
