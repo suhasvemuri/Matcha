@@ -32,9 +32,26 @@ data class StandingRow(
 
 data class StandingGroup(val name: String, val rows: List<StandingRow>)
 
+/** A starting XI laid out by formation for the pitch graphic. */
+data class FormationPlayer(
+    val name: String,
+    val jersey: String,
+    val line: Int,        // 0 = GK, 1 = defenders, ... up the pitch
+    val indexInLine: Int,
+    val lineCount: Int,
+)
+
+data class TeamFormation(
+    val teamName: String,
+    val formation: String,
+    val players: List<FormationPlayer>,
+)
+
 data class MatchExtras(
     val stats: List<StatComparison> = emptyList(),
     val group: StandingGroup? = null,
+    val homeFormation: TeamFormation? = null,
+    val awayFormation: TeamFormation? = null,
 )
 
 /**
@@ -50,25 +67,44 @@ class EspnDetailApi(
         val league = Leagues.byId(match.leagueId) ?: return@coroutineScope MatchExtras()
         val eventId = match.id.removePrefix("${match.leagueId}-")
 
-        val statsDeferred = async(Dispatchers.IO) { fetchStats(league.slug, eventId) }
+        val summaryDeferred = async(Dispatchers.IO) { fetchSummary(league.slug, eventId, match) }
         val groupDeferred = async(Dispatchers.IO) { fetchGroup(league.slug, match) }
-        MatchExtras(stats = statsDeferred.await(), group = groupDeferred.await())
+        val summary = summaryDeferred.await()
+        MatchExtras(
+            stats = summary?.first ?: emptyList(),
+            group = groupDeferred.await(),
+            homeFormation = summary?.second,
+            awayFormation = summary?.third,
+        )
     }
 
-    private fun fetchStats(slug: String, eventId: String): List<StatComparison> {
+    private fun fetchSummary(
+        slug: String,
+        eventId: String,
+        match: Match,
+    ): Triple<List<StatComparison>, TeamFormation?, TeamFormation?>? {
         val url = "https://site.api.espn.com/apis/site/v2/sports/soccer/$slug/summary?event=$eventId"
-        val body = httpGet(url) ?: return emptyList()
-        val summary = runCatching { json.decodeFromString<Summary>(body) }.getOrNull() ?: return emptyList()
-        val home = summary.boxscore.teams.firstOrNull { it.homeAway == "home" } ?: return emptyList()
-        val away = summary.boxscore.teams.firstOrNull { it.homeAway == "away" } ?: return emptyList()
-        val homeMap = home.statistics.associateBy { it.name }
-        val awayMap = away.statistics.associateBy { it.name }
+        val body = httpGet(url) ?: return null
+        val summary = runCatching { json.decodeFromString<Summary>(body) }.getOrNull() ?: return null
 
-        return STAT_ORDER.mapNotNull { (key, label) ->
-            val h = homeMap[key]?.displayValue ?: return@mapNotNull null
-            val a = awayMap[key]?.displayValue ?: return@mapNotNull null
-            StatComparison(label, h, a, fraction(h, a))
-        }
+        val home = summary.boxscore.teams.firstOrNull { it.homeAway == "home" }
+        val away = summary.boxscore.teams.firstOrNull { it.homeAway == "away" }
+        val stats = if (home != null && away != null) {
+            val homeMap = home.statistics.associateBy { it.name }
+            val awayMap = away.statistics.associateBy { it.name }
+            STAT_ORDER.mapNotNull { (key, label) ->
+                val h = homeMap[key]?.displayValue ?: return@mapNotNull null
+                val a = awayMap[key]?.displayValue ?: return@mapNotNull null
+                StatComparison(label, h, a, fraction(h, a))
+            }
+        } else emptyList()
+
+        // Map the two rosters to home/away by team name.
+        val homeName = match.home.name.lowercase()
+        val homeRoster = summary.rosters.firstOrNull { (it.team.displayName ?: "").lowercase() == homeName }
+            ?: summary.rosters.getOrNull(0)
+        val awayRoster = summary.rosters.firstOrNull { it !== homeRoster }
+        return Triple(stats, homeRoster?.toFormation(), awayRoster?.toFormation())
     }
 
     private fun fetchGroup(slug: String, match: Match): StandingGroup? {
@@ -140,7 +176,60 @@ class EspnDetailApi(
 // --- ESPN payload models (subset) ---------------------------------------
 
 @Serializable
-private data class Summary(val boxscore: Boxscore = Boxscore())
+private data class Summary(
+    val boxscore: Boxscore = Boxscore(),
+    val rosters: List<Roster> = emptyList(),
+)
+
+@Serializable
+private data class Roster(
+    val homeAway: String? = null,
+    val formation: String? = null,
+    val team: BoxTeamInfo = BoxTeamInfo(),
+    val roster: List<RosterPlayer> = emptyList(),
+) {
+    fun toFormation(): TeamFormation? {
+        val f = formation ?: return null
+        val starters = roster.filter { it.starter == true }.sortedBy { it.formationPlace ?: 99 }
+        if (starters.size < 11) return null
+        val lines = listOf(1) + f.split("-").mapNotNull { it.toIntOrNull() } // GK + outfield
+        val players = mutableListOf<FormationPlayer>()
+        var idx = 0
+        for ((lineIdx, count) in lines.withIndex()) {
+            for (i in 0 until count) {
+                val p = starters.getOrNull(idx) ?: break
+                players.add(
+                    FormationPlayer(
+                        name = p.athlete?.shortName ?: p.athlete?.displayName.orEmpty(),
+                        jersey = p.athlete?.jersey.orEmpty(),
+                        line = lineIdx,
+                        indexInLine = i,
+                        lineCount = count,
+                    ),
+                )
+                idx++
+            }
+        }
+        return TeamFormation(team.displayName.orEmpty(), f, players)
+    }
+}
+
+@Serializable
+private data class BoxTeamInfo(val displayName: String? = null)
+
+@Serializable
+private data class RosterPlayer(
+    val starter: Boolean? = null,
+    val formationPlace: Int? = null,
+    val athlete: Athlete? = null,
+)
+
+@Serializable
+private data class Athlete(
+    val displayName: String? = null,
+    val shortName: String? = null,
+    val jersey: String? = null,
+)
 
 @Serializable
 private data class Boxscore(val teams: List<BoxTeam> = emptyList())

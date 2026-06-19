@@ -94,6 +94,11 @@ fun MatchDetailContent(
             extras.stats.forEach { StatBar(it) }
         }
 
+        if (extras.homeFormation != null || extras.awayFormation != null) {
+            SectionHeader("Lineups")
+            FormationPitch(extras.homeFormation, extras.awayFormation)
+        }
+
         extras.group?.let { group ->
             SectionHeader(group.name)
             StandingsTable(group)
