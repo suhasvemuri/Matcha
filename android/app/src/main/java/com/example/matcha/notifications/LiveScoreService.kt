@@ -66,18 +66,26 @@ class LiveScoreService : Service() {
     }
 
     private fun updateNotifications(live: List<Match>) {
+        if (live.isEmpty()) return
         val liveIds = live.map { it.id }.toSet()
         // Clear finished matches we were tracking.
         (trackedIds - liveIds).forEach { notifier.clearMatch(it) }
         trackedIds.clear()
         trackedIds.addAll(liveIds)
 
-        startForegroundCompat(live.size)
-        live.forEach { notifier.notifyMatch(it) }
+        // Make the primary live match the foreground notification — a single,
+        // standalone, promotable Live Update (not auto-grouped with a summary).
+        val primary = live.first()
+        startForegroundWith(notifier.buildMatchNotification(primary))
+        notifier.clearMatch(primary.id) // it now lives as the FGS notification
+        live.drop(1).forEach { notifier.notifyMatch(it) }
     }
 
     private fun startForegroundCompat(liveCount: Int) {
-        val notification = notifier.summary(liveCount)
+        startForegroundWith(notifier.summary(liveCount))
+    }
+
+    private fun startForegroundWith(notification: android.app.Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
                 this,

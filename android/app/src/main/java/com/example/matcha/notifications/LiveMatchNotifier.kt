@@ -1,5 +1,6 @@
 package com.example.matcha.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -38,24 +39,24 @@ class LiveMatchNotifier(private val context: Context) {
         }
     }
 
-    /** A summary notification used as the foreground-service anchor. */
-    fun summary(liveCount: Int) =
+    /** A transient anchor notification shown before the first poll resolves. */
+    fun summary(liveCount: Int): Notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_matcha)
             .setContentTitle("Matcha")
-            .setContentText(
-                if (liveCount == 0) "Watching for live matches…"
-                else "$liveCount live ${if (liveCount == 1) "match" else "matches"}",
-            )
+            .setContentText("Watching for live matches…")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent())
-            .setGroup(GROUP_KEY)
-            .setGroupSummary(true)
             .build()
 
     fun notifyMatch(match: Match) {
         if (!canPost()) return
+        manager.notify(match.id.hashCode(), buildMatchNotification(match))
+    }
+
+    /** Builds a promotable (Android 16 Live Update) notification for a match. */
+    fun buildMatchNotification(match: Match): Notification {
         val title = "${match.home.shortName} ${match.home.score ?: ""} – ${match.away.score ?: ""} ${match.away.shortName}"
         val body = buildString {
             append(match.leagueName)
@@ -84,7 +85,7 @@ class LiveMatchNotifier(private val context: Context) {
             .setShortCriticalText(chip)
 
         applyMatchStyle(builder, match)
-        manager.notify(match.id.hashCode(), builder.build())
+        return builder.build()
     }
 
     /** ProgressStyle shows the match minute as a live bar; falls back to BigText. */
