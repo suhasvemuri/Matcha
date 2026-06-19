@@ -17,18 +17,21 @@ class StreamedResolver(
     private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true },
 ) {
     suspend fun resolve(match: Match): List<StreamOption> = withContext(Dispatchers.IO) {
-        val base = BASES.firstOrNull { httpGet(it + matchPath(match, live = match.isLive)) != null }
+        val base = BASES.firstOrNull { httpGet("$it/api/matches/all-today") != null }
             ?: BASES.first()
 
-        val candidates = matchPaths(match).asSequence()
-            .mapNotNull { httpGet(base + it) }
-            .firstOrNull() ?: return@withContext emptyList()
+        // Search across every relevant endpoint and pool the candidates — the
+        // match might be listed under live, the sport, or the day, with
+        // differing coverage. Dedupe by id, then pick the best name match.
+        val pooled = LinkedHashMap<String, StreamedMatch>()
+        for (path in matchPaths(match)) {
+            val body = httpGet(base + path) ?: continue
+            runCatching { json.decodeFromString<List<StreamedMatch>>(body) }
+                .getOrDefault(emptyList())
+                .forEach { pooled.putIfAbsent(it.id.ifBlank { it.title }, it) }
+        }
 
-        val matches = runCatching {
-            json.decodeFromString<List<StreamedMatch>>(candidates)
-        }.getOrDefault(emptyList())
-
-        val event = bestMatch(matches, match) ?: return@withContext emptyList()
+        val event = bestMatch(pooled.values.toList(), match) ?: return@withContext emptyList()
 
         event.sources.flatMap { source -> resolveSource(base, source) }
             .distinctBy { it.url }
@@ -69,38 +72,53 @@ class StreamedResolver(
             language = null,
         )
 
-    private fun bestMatch(matches: List<StreamedMatch>, target: Match): StreamedMatch? {
-        val home = target.home.name.lowercase()
-        val away = target.away.name.lowercase()
+    internal fun bestMatch(matches: List<StreamedMatch>, target: Match): StreamedMatch? {
+        val category = sportCategory(target.sport)
+        val homeTokens = tokens(target.home.name)
+        val awayTokens = tokens(target.away.name)
         return matches
-            .map { it to score(it, home, away) }
-            .filter { it.second > 0 }
+            // Prefer same-sport candidates, but don't hard-require it.
+            .map { it to score(it, homeTokens, awayTokens, category) }
+            .filter { it.second >= 2 }
             .maxByOrNull { it.second }
             ?.first
     }
 
-    private fun score(candidate: StreamedMatch, home: String, away: String): Int {
-        val hay = buildString {
-            append(candidate.title.lowercase())
-            candidate.teams?.home?.name?.let { append(" ").append(it.lowercase()) }
-            candidate.teams?.away?.name?.let { append(" ").append(it.lowercase()) }
-        }
+    private fun score(
+        candidate: StreamedMatch,
+        homeTokens: List<String>,
+        awayTokens: List<String>,
+        category: String,
+    ): Int {
+        val hay = normalize(
+            buildString {
+                append(candidate.title)
+                candidate.teams?.home?.name?.let { append(" ").append(it) }
+                candidate.teams?.away?.name?.let { append(" ").append(it) }
+            },
+        )
         var s = 0
-        if (containsTeam(hay, home)) s += 2
-        if (containsTeam(hay, away)) s += 2
+        if (matchesTeam(hay, homeTokens)) s += 2
+        if (matchesTeam(hay, awayTokens)) s += 2
+        if (s > 0 && candidate.category.equals(category, ignoreCase = true)) s += 1
         return s
     }
 
-    private fun containsTeam(hay: String, team: String): Boolean {
-        if (team.isBlank()) return false
-        if (hay.contains(team)) return true
-        // Fall back to the most distinctive word (e.g. "Manchester" from "Manchester City").
-        val token = team.split(" ").maxByOrNull { it.length } ?: return false
-        return token.length >= 4 && hay.contains(token)
-    }
+    /** A team matches if any of its significant (>=4 char) tokens appears. */
+    private fun matchesTeam(haystack: String, teamTokens: List<String>): Boolean =
+        teamTokens.isNotEmpty() && teamTokens.any { haystack.contains(it) }
 
-    private fun matchPath(match: Match, live: Boolean): String =
-        if (live) "/api/matches/live" else sportPath(match.sport)
+    private fun tokens(name: String): List<String> =
+        normalize(name).split(" ").filter { it.length >= 4 }
+
+    /** Lowercase, strip punctuation/separators (hyphens, &, dots) to spaces. */
+    private fun normalize(s: String): String =
+        s.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    private fun sportCategory(sport: Sport): String = when (sport) {
+        Sport.SOCCER -> "football"
+        Sport.CRICKET -> "cricket"
+    }
 
     private fun matchPaths(match: Match): List<String> = buildList {
         if (match.isLive) add("/api/matches/live")
