@@ -34,9 +34,30 @@ class LiveMatchNotifier(private val context: Context) {
                 description = "Ongoing scores for your favorite live matches"
                 setShowBadge(false)
             }
+            val goals = NotificationChannel(
+                GOAL_CHANNEL_ID,
+                "Goal alerts",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply { description = "Alerts when a team scores in your live matches" }
             val sys = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             sys.createNotificationChannel(channel)
+            sys.createNotificationChannel(goals)
         }
+    }
+
+    /** A heads-up alert when a goal is scored in a tracked match. */
+    fun notifyGoal(match: Match) {
+        if (!canPost()) return
+        val score = "${match.home.shortName} ${match.home.score ?: "0"} – ${match.away.score ?: "0"} ${match.away.shortName}"
+        val n = NotificationCompat.Builder(context, GOAL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_matcha)
+            .setContentTitle("⚽ GOAL — ${match.leagueName}")
+            .setContentText(score)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent())
+            .build()
+        manager.notify("goal-${match.id}".hashCode(), n)
     }
 
     /** A transient anchor notification shown before the first poll resolves. */
@@ -126,6 +147,7 @@ class LiveMatchNotifier(private val context: Context) {
 
     companion object {
         const val CHANNEL_ID = "matcha_live_matches"
+        const val GOAL_CHANNEL_ID = "matcha_goal_alerts"
         const val GROUP_KEY = "matcha_live_group"
         const val SUMMARY_ID = 1001
     }

@@ -65,8 +65,23 @@ class LiveScoreService : Service() {
         }
     }
 
+    private val lastScores = mutableMapOf<String, Int>()
+
+    private fun checkForGoals(live: List<Match>) {
+        for (m in live) {
+            val total = scoreInt(m.home.score) + scoreInt(m.away.score)
+            val prev = lastScores[m.id]
+            if (prev != null && total > prev) notifier.notifyGoal(m)
+            lastScores[m.id] = total
+        }
+    }
+
+    private fun scoreInt(raw: String?): Int =
+        raw?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
+
     private fun updateNotifications(live: List<Match>) {
         if (live.isEmpty()) return
+        checkForGoals(live)
         val liveIds = live.map { it.id }.toSet()
         // Clear finished matches we were tracking.
         (trackedIds - liveIds).forEach { notifier.clearMatch(it) }
