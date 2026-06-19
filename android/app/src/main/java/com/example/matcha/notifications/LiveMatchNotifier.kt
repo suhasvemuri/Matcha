@@ -61,16 +61,45 @@ class LiveMatchNotifier(private val context: Context) {
             append(match.leagueName)
             if (match.statusDetail.isNotBlank()) append(" · ${match.statusDetail}")
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val chip = buildString {
+            append(match.home.abbreviation.ifBlank { match.home.shortName })
+            append(" ")
+            append(match.home.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" })
+            append("-")
+            append(match.away.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" })
+            append(" ")
+            append(match.away.abbreviation.ifBlank { match.away.shortName })
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_matcha)
             .setContentTitle(title)
             .setContentText(body)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent())
-            .setGroup(GROUP_KEY)
-            .build()
-        manager.notify(match.id.hashCode(), notification)
+            // Android 16 Live Update: surface as a promoted ongoing notification
+            // (status-bar chip + lock screen). No-op/normal ongoing on older OS.
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText(chip)
+
+        applyMatchStyle(builder, match)
+        manager.notify(match.id.hashCode(), builder.build())
+    }
+
+    /** ProgressStyle shows the match minute as a live bar; falls back to BigText. */
+    private fun applyMatchStyle(builder: NotificationCompat.Builder, match: Match) {
+        val minute = match.statusDetail.takeWhile { it.isDigit() }.toIntOrNull()
+        if (match.sport == com.example.matcha.data.Sport.SOCCER && minute != null) {
+            val total = 90
+            val progress = minute.coerceIn(0, total)
+            val style = NotificationCompat.ProgressStyle()
+                .setProgress(progress)
+                .setProgressSegments(listOf(NotificationCompat.ProgressStyle.Segment(total)))
+            builder.setStyle(style)
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText("${match.home.name} vs ${match.away.name}"))
+        }
     }
 
     fun clearMatch(matchId: String) {
