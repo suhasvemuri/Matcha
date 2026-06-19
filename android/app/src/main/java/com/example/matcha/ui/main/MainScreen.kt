@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import coil.compose.AsyncImage
@@ -104,6 +105,17 @@ fun MainScreen(
 
     val selectedMatch = (state as? ScoresUiState.Success)?.groups
         ?.flatMap { it.matches }?.firstOrNull { it.id == selected }
+
+    // Auto-refresh live scores every 30s while the screen is resumed.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            while (true) {
+                kotlinx.coroutines.delay(30_000)
+                viewModel.refreshIfLive()
+            }
+        }
+    }
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalFavoriteTeams provides favoriteTeams,

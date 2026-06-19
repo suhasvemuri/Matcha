@@ -78,6 +78,17 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Quietly re-fetch (no spinner) when a live match is on — for auto-refresh. */
+    fun refreshIfLive() {
+        val hasLive = repository.leagueMatches.value
+            .any { group -> group.matches.any { it.state == MatchState.LIVE } }
+        if (!hasLive) return
+        viewModelScope.launch {
+            val snap = favoriteSnapshot.first()
+            runCatching { repository.refresh(snap.leagues, snap.teams) }
+        }
+    }
+
     /** Spin up the live-score foreground service when something is in play. */
     private fun startLiveTrackingIfNeeded() {
         val hasLive = repository.leagueMatches.value
