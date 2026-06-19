@@ -28,7 +28,8 @@ private val ExpressiveShapes = Shapes(
 
 @Composable
 fun MatchaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Apple Sports-style: dark by default regardless of system setting.
+    darkTheme: Boolean = true,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {

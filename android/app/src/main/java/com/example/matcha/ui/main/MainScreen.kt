@@ -215,116 +215,122 @@ private fun LeagueHeader(group: LeagueMatches, modifier: Modifier = Modifier) {
 
 @Composable
 private fun MatchRow(match: Match, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val homeScore = leadingScore(match.home.score)
+    val awayScore = leadingScore(match.away.score)
+    val decided = match.state != MatchState.UPCOMING && homeScore != null && awayScore != null
+    val homeDim = decided && homeScore!! < awayScore!!
+    val awayDim = decided && awayScore!! < homeScore!!
+
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.large,
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-            // Team-color accent strip (home on top, away below).
-            Column(Modifier.width(5.dp).fillMaxHeight()) {
-                Box(Modifier.weight(1f).fillMaxWidth().background(teamColor(match.home, MaterialTheme.colorScheme.primary)))
-                Box(Modifier.weight(1f).fillMaxWidth().background(teamColor(match.away, MaterialTheme.colorScheme.tertiary)))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TeamLine(match.home, match.state, dim = homeDim)
+                TeamLine(match.away, match.state, dim = awayDim)
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TeamLine(match.home, match.state)
-                    TeamLine(match.away, match.state)
-                }
-                Spacer(Modifier.width(10.dp))
-                StatusBadge(match)
-            }
+            Spacer(Modifier.width(12.dp))
+            StatusColumn(match)
         }
     }
 }
 
-private fun teamColor(team: MatchTeam, fallback: Color): Color =
-    team.colorArgb?.let { Color(it) } ?: fallback
-
 @Composable
-private fun TeamLine(team: MatchTeam, state: MatchState) {
+private fun TeamLine(team: MatchTeam, state: MatchState, dim: Boolean) {
+    val contentColor = if (dim) MaterialTheme.colorScheme.onSurfaceVariant
+    else MaterialTheme.colorScheme.onSurface
     Row(verticalAlignment = Alignment.CenterVertically) {
         AsyncImage(
             model = team.logoUrl,
             contentDescription = null,
             contentScale = ContentScale.Fit,
-            modifier = Modifier.size(22.dp).clip(CircleShape),
+            modifier = Modifier.size(26.dp),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
             text = team.name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (team.isWinner) FontWeight.Bold else FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor,
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            // Cricket scores arrive verbose ("161/5 (18/20 ov, target 156)");
-            // show the concise lead ("161/5"). Soccer scores are unaffected.
-            text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "-" },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            color = if (state == MatchState.UPCOMING)
-                MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-private fun StatusBadge(match: Match) {
-    when (match.state) {
-        MatchState.LIVE -> LivePill(match.statusDetail.ifBlank { "LIVE" })
-        MatchState.FINAL -> StatusPill("FT", MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
-        MatchState.UPCOMING -> StatusPill(match.statusDetail.ifBlank { "Soon" }, MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun StatusPill(label: String, container: Color, content: Color) {
-    Surface(color = container, shape = MaterialTheme.shapes.small) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = content,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun LivePill(label: String) {
-    val transition = rememberInfiniteTransition(label = "live")
-    val pulse by transition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
-        label = "pulse",
-    )
-    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.small) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            Box(
-                Modifier.size(7.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = pulse)),
-            )
-            Spacer(Modifier.width(5.dp))
+        if (state != MatchState.UPCOMING) {
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
+                // Cricket scores arrive verbose ("161/5 (18/20 ov)"); show the lead.
+                text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" },
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onErrorContainer,
+                maxLines = 1,
+                color = contentColor,
             )
         }
     }
+}
+
+@Composable
+private fun StatusColumn(match: Match) {
+    Box(Modifier.width(66.dp), contentAlignment = Alignment.Center) {
+        when (match.state) {
+            MatchState.LIVE -> LiveStatus(match.statusDetail.ifBlank { "LIVE" })
+            MatchState.FINAL -> Text(
+                "Final",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            MatchState.UPCOMING -> Text(
+                kickoffLabel(match.kickoffEpochMs).ifBlank { match.statusDetail.ifBlank { "—" } },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveStatus(label: String) {
+    val transition = rememberInfiniteTransition(label = "live")
+    val pulse by transition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(7.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = pulse)),
+        )
+        Spacer(Modifier.size(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Parse the leading integer of a score ("161/5" -> 161, "2" -> 2). */
+private fun leadingScore(raw: String?): Int? =
+    raw?.trim()?.takeWhile { it.isDigit() }?.toIntOrNull()
+
+private fun kickoffLabel(epochMs: Long): String {
+    if (epochMs <= 0) return ""
+    val fmt = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+    return fmt.format(java.util.Date(epochMs))
 }
 
 @Composable
