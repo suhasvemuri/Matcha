@@ -7,32 +7,40 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
-import android.view.View
+import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.ProgressBar
 import androidx.activity.ComponentActivity
 import androidx.annotation.OptIn
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.google.android.gms.cast.framework.CastContext
 
 /**
- * Full-screen, immersive stream player with Picture-in-Picture.
+ * Immersive stream player with Picture-in-Picture.
  *
- * - Direct streams (.m3u8/.mpd/.mp4/.ts) play in ExoPlayer (Media3) and can be
- *   cast to a Google Cast device.
- * - Embed pages (e.g. streamed.st's embed.st) play in a clean full-screen
- *   WebView — the common case for the Streamed provider.
+ * Plays natively in ExoPlayer (Media3): direct streams play immediately; for
+ * embed pages (streamed.st's embed.st) an offscreen WebView is loaded and its
+ * dynamically-fetched HLS playlist (.m3u8) is intercepted and handed to
+ * ExoPlayer — so the match plays in-app, not on the website. Falls back to
+ * the WebView player only if no playlist can be extracted.
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
@@ -40,44 +48,90 @@ class PlayerActivity : ComponentActivity() {
     private var exoPlayer: ExoPlayer? = null
     private var playerView: PlayerView? = null
     private var webView: WebView? = null
+    private var spinner: ProgressBar? = null
+    private lateinit var root: FrameLayout
+
+    private var nativePlaying = false
+    private var extractionDone = false
+    private val main = Handler(Looper.getMainLooper())
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
         if (url.isBlank()) { finish(); return }
+        runCatching { CastContext.getSharedInstance(this) }
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
-        val root = FrameLayout(this).apply {
+        root = FrameLayout(this).apply {
             setBackgroundColor(0xFF000000.toInt())
             layoutParams = ViewGroup.LayoutParams(MATCH, MATCH)
         }
         setContentView(root)
+        spinner = ProgressBar(this).apply {
+            layoutParams = FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER)
+        }
+        root.addView(spinner)
 
         if (isDirectStream(url)) {
-            setupExoPlayer(root, url)
+            playNative(url, emptyMap())
         } else {
-            setupWebView(root, url)
+            setupEmbedExtraction(url)
         }
     }
 
-    private fun setupExoPlayer(root: FrameLayout, url: String) {
-        runCatching { CastContext.getSharedInstance(this) } // warm up cast if available
-        val player = ExoPlayer.Builder(this).build().also { exoPlayer = it }
+    /** Play an HLS/stream URL natively in ExoPlayer. */
+    private fun playNative(url: String, headers: Map<String, String>) {
+        if (nativePlaying) return
+        nativePlaying = true
+        spinner?.let { root.removeView(it) }
+
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setUserAgent(DESKTOP_UA)
+            .setDefaultRequestProperties(
+                buildMap {
+                    put("Referer", "https://embed.st/")
+                    headers["Referer"]?.let { put("Referer", it) }
+                    headers["Origin"]?.let { put("Origin", it) }
+                },
+            )
+        val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .build()
+            .also { exoPlayer = it }
+
         val view = PlayerView(this).apply {
             this.player = player
             layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
+            setShowNextButton(false)
+            setShowPreviousButton(false)
         }
         playerView = view
         root.addView(view)
-        player.setMediaItem(MediaItem.fromUri(url))
+
+        // Mute/hide the extraction WebView so there's no double audio.
+        webView?.let { wv ->
+            wv.evaluateJavascript(
+                "document.querySelectorAll('video').forEach(v=>{v.muted=true;v.pause();});", null,
+            )
+            wv.visibility = android.view.View.GONE
+        }
+
+        val media = if (url.contains(".m3u8")) {
+            HlsMediaSource.Factory(httpFactory).createMediaSource(MediaItem.fromUri(url))
+        } else {
+            null
+        }
+        if (media != null) player.setMediaSource(media) else player.setMediaItem(MediaItem.fromUri(url))
         player.playWhenReady = true
         player.prepare()
     }
 
-    private fun setupWebView(root: FrameLayout, url: String) {
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupEmbedExtraction(embedUrl: String) {
         val web = WebView(this).apply {
             layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
             settings.javaScriptEnabled = true
@@ -85,12 +139,36 @@ class PlayerActivity : ComponentActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
-            webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient() // enables native fullscreen video
+            settings.userAgentString = DESKTOP_UA
+            visibility = android.view.View.INVISIBLE // hidden until we decide
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    val u = request?.url?.toString()
+                    if (u != null && !extractionDone && u.contains(".m3u8") && !u.contains("/ad")) {
+                        extractionDone = true
+                        val headers = request.requestHeaders ?: emptyMap()
+                        main.post { playNative(u, headers) }
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+            }
         }
         webView = web
-        root.addView(web)
-        web.loadUrl(url)
+        root.addView(web, 0) // behind the spinner
+        web.loadUrl(embedUrl)
+
+        // Fallback: if no playlist is intercepted, show the WebView player.
+        main.postDelayed({
+            if (!nativePlaying) {
+                extractionDone = true
+                spinner?.let { root.removeView(it) }
+                web.visibility = android.view.View.VISIBLE
+            }
+        }, EXTRACT_TIMEOUT_MS)
     }
 
     // --- Picture-in-Picture -------------------------------------------------
@@ -103,24 +181,19 @@ class PlayerActivity : ComponentActivity() {
     private fun enterPip() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
-        if (exoPlayer?.isPlaying != true && webView == null) return
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .build()
+        val params = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
         runCatching { enterPictureInPictureMode(params) }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // Hide player chrome in PiP for a clean thumbnail.
         playerView?.useController = !isInPictureInPictureMode
     }
 
     private fun hideSystemBars() {
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
     override fun onStop() {
@@ -140,6 +213,7 @@ class PlayerActivity : ComponentActivity() {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
 
     override fun onDestroy() {
+        main.removeCallbacksAndMessages(null)
         exoPlayer?.release()
         exoPlayer = null
         (webView?.parent as? ViewGroup)?.removeView(webView)
@@ -150,6 +224,10 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
+        private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+        private const val EXTRACT_TIMEOUT_MS = 18_000L
+        private const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
 
