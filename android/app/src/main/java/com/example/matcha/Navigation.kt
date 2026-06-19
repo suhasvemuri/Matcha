@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.example.matcha.ui.bracket.BracketScreen
 import com.example.matcha.ui.favorites.FavoritesScreen
 import com.example.matcha.ui.main.MainScreen
 
@@ -25,6 +26,9 @@ fun MainNavigation() {
         }
         entry<Favorites> {
           FavoritesScreen(onBack = { backStack.removeLastOrNull() })
+        }
+        entry<Bracket> { key ->
+          BracketScreen(leagueId = key.leagueId, onBack = { backStack.removeLastOrNull() })
         }
       },
   )

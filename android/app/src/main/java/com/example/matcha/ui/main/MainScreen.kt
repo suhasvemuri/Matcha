@@ -89,6 +89,7 @@ fun MainScreen(
         onClearSelection = { selected = null },
         onWatch = viewModel::showStreams,
         onOpenFavorites = { onItemClick(com.example.matcha.Favorites) },
+        onOpenBracket = { onItemClick(com.example.matcha.Bracket(it)) },
         modifier = modifier,
     )
     sheet?.let {
@@ -109,6 +110,7 @@ private fun ScoresContent(
     onClearSelection: () -> Unit,
     onWatch: (Match) -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenBracket: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -160,7 +162,7 @@ private fun ScoresContent(
                         modifier = Modifier.weight(0.58f).fillMaxSize(),
                     ) {
                         if (selectedMatch != null) {
-                            MatchDetailContent(selectedMatch, onWatch)
+                            MatchDetailContent(selectedMatch, onWatch, onOpenBracket = bracketCallback(selectedMatch, onOpenBracket))
                         } else {
                             MatchDetailPlaceholder()
                         }
@@ -173,7 +175,7 @@ private fun ScoresContent(
                         ScoresPane(displayState, onTap)
                     } else {
                         BackHandler(enabled = true, onBack = onClearSelection)
-                        MatchDetailContent(detail, onWatch)
+                        MatchDetailContent(detail, onWatch, onOpenBracket = bracketCallback(detail, onOpenBracket))
                     }
                 }
             }
@@ -182,6 +184,12 @@ private fun ScoresContent(
 }
 
 enum class DateTab(val label: String) { YESTERDAY("Yesterday"), TODAY("Today"), UPCOMING("Upcoming") }
+
+/** Cup competitions that have a knockout bracket. */
+private val BRACKET_LEAGUES = setOf("FFWC", "FFWWC", "UEFA", "EUEFA")
+
+private fun bracketCallback(match: Match, onOpenBracket: (String) -> Unit): ((String) -> Unit)? =
+    if (match.leagueId in BRACKET_LEAGUES) onOpenBracket else null
 
 @Composable
 private fun DateTabRow(selected: DateTab, onSelect: (DateTab) -> Unit) {

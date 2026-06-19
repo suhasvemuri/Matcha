@@ -58,6 +58,7 @@ fun MatchDetailContent(
     match: Match,
     onWatch: (Match) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenBracket: ((String) -> Unit)? = null,
 ) {
     val extras by produceState(initialValue = MatchExtras(), match.id) {
         value = runCatching { EspnDetailApi().fetch(match) }.getOrDefault(MatchExtras())
@@ -87,6 +88,13 @@ fun MatchDetailContent(
             Icon(Icons.Filled.PlayArrow, contentDescription = null)
             Spacer(Modifier.size(8.dp))
             Text("Where to watch")
+        }
+        onOpenBracket?.let { open ->
+            Spacer(Modifier.height(10.dp))
+            androidx.compose.material3.OutlinedButton(
+                onClick = { open(match.leagueId) },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Tournament bracket") }
         }
 
         if (extras.stats.isNotEmpty()) {
