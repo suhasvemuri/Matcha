@@ -28,7 +28,7 @@ private val ExpressiveShapes = Shapes(
 
 @Composable
 fun MatchaTheme(
-    // Apple Sports-style: dark by default regardless of system setting.
+    // Apple Sports-style: dark by default; overridden by user settings.
     darkTheme: Boolean = true,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,

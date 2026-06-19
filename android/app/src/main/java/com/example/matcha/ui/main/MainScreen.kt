@@ -39,11 +39,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -116,6 +118,7 @@ fun MainScreen(
         onClearSelection = { selected = null },
         onWatch = viewModel::showStreams,
         onOpenFavorites = { onItemClick(com.example.matcha.Favorites) },
+        onOpenSettings = { onItemClick(com.example.matcha.Settings) },
         onOpenBracket = { onItemClick(com.example.matcha.Bracket(it)) },
         modifier = modifier,
     )
@@ -140,6 +143,7 @@ private fun ScoresContent(
     onClearSelection: () -> Unit,
     onWatch: (Match) -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenBracket: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -171,6 +175,10 @@ private fun ScoresContent(
                     onOpenFavorites = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         onOpenFavorites()
+                    },
+                    onOpenSettings = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenSettings()
                     },
                 )
 
@@ -231,7 +239,7 @@ private fun ScoresContent(
 }
 
 @Composable
-private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: () -> Unit) {
+private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: () -> Unit, onOpenSettings: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
@@ -247,7 +255,7 @@ private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: (
             Surface(
                 color = accent.copy(alpha = 0.18f),
                 shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.padding(end = 8.dp),
+                modifier = Modifier.padding(end = 6.dp),
             ) {
                 Text(
                     it,
@@ -261,6 +269,10 @@ private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: (
         }
         FilledTonalIconButton(onClick = onOpenFavorites) {
             Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
+        }
+        Spacer(Modifier.width(6.dp))
+        IconButton(onClick = onOpenSettings) {
+            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

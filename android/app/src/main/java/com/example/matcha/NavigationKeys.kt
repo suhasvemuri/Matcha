@@ -7,4 +7,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object Favorites : NavKey
 
+@Serializable data object Settings : NavKey
+
 @Serializable data class Bracket(val leagueId: String) : NavKey

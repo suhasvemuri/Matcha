@@ -27,6 +27,9 @@ fun MainNavigation() {
         entry<Favorites> {
           FavoritesScreen(onBack = { backStack.removeLastOrNull() })
         }
+        entry<Settings> {
+          com.example.matcha.ui.settings.SettingsScreen(onBack = { backStack.removeLastOrNull() })
+        }
         entry<Bracket> { key ->
           BracketScreen(leagueId = key.leagueId, onBack = { backStack.removeLastOrNull() })
         }

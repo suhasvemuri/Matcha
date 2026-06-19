@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.core.content.ContextCompat
@@ -30,7 +32,14 @@ class MainActivity : ComponentActivity() {
     maybeRequestNotificationPermission()
     enableEdgeToEdge()
     setContent {
-      MatchaTheme {
+      val settings by com.example.matcha.data.SettingsStore(this)
+        .settings.collectAsState(initial = com.example.matcha.data.MatchaSettings())
+      val dark = when (settings.themeMode) {
+        com.example.matcha.data.ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        com.example.matcha.data.ThemeMode.DARK -> true
+        com.example.matcha.data.ThemeMode.LIGHT -> false
+      }
+      MatchaTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
           MainNavigation()
         }
