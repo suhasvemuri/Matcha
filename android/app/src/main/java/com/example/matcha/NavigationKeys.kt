@@ -9,4 +9,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object Settings : NavKey
 
+@Serializable data object Search : NavKey
+
 @Serializable data class Bracket(val leagueId: String) : NavKey

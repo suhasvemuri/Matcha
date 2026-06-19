@@ -30,6 +30,9 @@ fun MainNavigation() {
         entry<Settings> {
           com.example.matcha.ui.settings.SettingsScreen(onBack = { backStack.removeLastOrNull() })
         }
+        entry<Search> {
+          com.example.matcha.ui.search.SearchScreen(onBack = { backStack.removeLastOrNull() })
+        }
         entry<Bracket> { key ->
           BracketScreen(leagueId = key.leagueId, onBack = { backStack.removeLastOrNull() })
         }

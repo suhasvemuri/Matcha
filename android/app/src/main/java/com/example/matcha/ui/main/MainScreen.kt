@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
@@ -131,6 +132,7 @@ fun MainScreen(
         onWatch = viewModel::showStreams,
         onOpenFavorites = { onItemClick(com.example.matcha.Favorites) },
         onOpenSettings = { onItemClick(com.example.matcha.Settings) },
+        onOpenSearch = { onItemClick(com.example.matcha.Search) },
         onOpenBracket = { onItemClick(com.example.matcha.Bracket(it)) },
         modifier = modifier,
     )
@@ -156,6 +158,7 @@ private fun ScoresContent(
     onWatch: (Match) -> Unit,
     onOpenFavorites: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenBracket: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -191,6 +194,10 @@ private fun ScoresContent(
                     onOpenSettings = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         onOpenSettings()
+                    },
+                    onOpenSearch = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onOpenSearch()
                     },
                 )
 
@@ -251,7 +258,7 @@ private fun ScoresContent(
 }
 
 @Composable
-private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: () -> Unit, onOpenSettings: () -> Unit) {
+private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: () -> Unit, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp),
@@ -263,26 +270,13 @@ private fun ScoresHeader(competition: String?, accent: Color, onOpenFavorites: (
             color = MaterialTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.weight(1f))
-        competition?.let {
-            Surface(
-                color = accent.copy(alpha = 0.18f),
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.padding(end = 6.dp),
-            ) {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accent,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                )
-            }
+        IconButton(onClick = onOpenSearch) {
+            Icon(Icons.Filled.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FilledTonalIconButton(onClick = onOpenFavorites) {
             Icon(Icons.Filled.Star, contentDescription = "Edit favorites")
         }
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(4.dp))
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
