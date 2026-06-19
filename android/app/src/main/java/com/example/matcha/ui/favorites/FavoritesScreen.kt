@@ -32,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +81,7 @@ fun FavoritesScreen(
                             league = league,
                             checked = league.id in favoriteLeagues,
                             onCheckedChange = { viewModel.setLeague(league.id, it) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -149,10 +152,16 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun LeagueToggleRow(league: League, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun LeagueToggleRow(
+    league: League,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Text(league.displayName, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
@@ -160,6 +169,14 @@ private fun LeagueToggleRow(league: League, checked: Boolean, onCheckedChange: (
                 Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.performHapticFeedback(
+                    if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                )
+                onCheckedChange(it)
+            },
+        )
     }
 }
