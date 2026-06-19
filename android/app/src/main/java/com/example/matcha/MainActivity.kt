@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
       }
       MatchaTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-          MainNavigation()
+          MainNavigation(startRoute = intent?.data?.host)
         }
       }
     }

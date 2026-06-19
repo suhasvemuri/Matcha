@@ -13,8 +13,14 @@ import com.example.matcha.ui.favorites.FavoritesScreen
 import com.example.matcha.ui.main.MainScreen
 
 @Composable
-fun MainNavigation() {
+fun MainNavigation(startRoute: String? = null) {
   val backStack = rememberNavBackStack(Main)
+  androidx.compose.runtime.LaunchedEffect(startRoute) {
+    when (startRoute) {
+      "search" -> if (backStack.lastOrNull() !is Search) backStack.add(Search)
+      "favorites" -> if (backStack.lastOrNull() !is Favorites) backStack.add(Favorites)
+    }
+  }
 
   NavDisplay(
     backStack = backStack,
