@@ -2,6 +2,7 @@ package com.example.matcha.ui.detail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,18 +98,36 @@ private fun Pitch(team: TeamFormation) {
 @Composable
 private fun PlayerDot(p: FormationPlayer) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier.size(26.dp).clip(CircleShape).background(Color.White),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                p.jersey.ifBlank { "•" },
-                color = Color(0xFF0B2C16),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-            )
+        Box(contentAlignment = Alignment.BottomEnd) {
+            // Player headshot with a jersey-number circle fallback.
+            Box(
+                Modifier.size(34.dp).clip(CircleShape)
+                    .background(Color.White)
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                coil.compose.AsyncImage(
+                    model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                        .data(p.photoUrl).crossfade(true).build(),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    error = jerseyPainter(p.jersey),
+                    fallback = jerseyPainter(p.jersey),
+                    placeholder = jerseyPainter(p.jersey),
+                    modifier = Modifier.size(34.dp).clip(CircleShape),
+                )
+            }
+            // Jersey number badge
+            if (p.jersey.isNotBlank()) {
+                Box(
+                    Modifier.size(15.dp).clip(CircleShape).background(Color(0xFF0B2C16)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(p.jersey, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
         }
+        Spacer(Modifier.height(2.dp))
         Text(
             p.name.substringAfterLast(' ').take(10),
             color = Color.White,
@@ -116,7 +135,11 @@ private fun PlayerDot(p: FormationPlayer) {
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            modifier = Modifier.width(48.dp),
+            modifier = Modifier.width(50.dp),
         )
     }
 }
+
+@Composable
+private fun jerseyPainter(jersey: String): androidx.compose.ui.graphics.painter.Painter =
+    androidx.compose.ui.graphics.painter.ColorPainter(Color(0xFFB8C4BC))

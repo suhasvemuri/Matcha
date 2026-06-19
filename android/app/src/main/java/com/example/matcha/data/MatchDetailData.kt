@@ -36,6 +36,7 @@ data class StandingGroup(val name: String, val rows: List<StandingRow>)
 data class FormationPlayer(
     val name: String,
     val jersey: String,
+    val photoUrl: String?,
     val line: Int,        // 0 = GK, 1 = defenders, ... up the pitch
     val indexInLine: Int,
     val lineCount: Int,
@@ -241,10 +242,14 @@ private data class Roster(
         for ((lineIdx, count) in lines.withIndex()) {
             for (i in 0 until count) {
                 val p = starters.getOrNull(idx) ?: break
+                val athleteId = p.athlete?.id
                 players.add(
                     FormationPlayer(
                         name = p.athlete?.shortName ?: p.athlete?.displayName.orEmpty(),
                         jersey = p.athlete?.jersey.orEmpty(),
+                        photoUrl = athleteId?.let {
+                            "https://a.espncdn.com/i/headshots/soccer/players/full/$it.png"
+                        },
                         line = lineIdx,
                         indexInLine = i,
                         lineCount = count,
@@ -269,6 +274,7 @@ private data class RosterPlayer(
 
 @Serializable
 private data class Athlete(
+    val id: String? = null,
     val displayName: String? = null,
     val shortName: String? = null,
     val jersey: String? = null,

@@ -7,7 +7,9 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -79,6 +81,9 @@ import com.example.matcha.ui.common.Crest
 import com.example.matcha.ui.detail.MatchDetailContent
 import com.example.matcha.ui.detail.MatchDetailPlaceholder
 
+/** Favorite team terms (lowercased) for the My-Teams star, avoiding param threading. */
+val LocalFavoriteTeams = androidx.compose.runtime.compositionLocalOf { emptySet<String>() }
+
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -88,11 +93,13 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val sheet by viewModel.streamSheet.collectAsStateWithLifecycle()
     val refreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val favoriteTeams by viewModel.favoriteTeams.collectAsStateWithLifecycle()
     var selected by rememberSaveable(stateSaver = MatchIdSaver) { mutableStateOf<String?>(null) }
 
     val selectedMatch = (state as? ScoresUiState.Success)?.groups
         ?.flatMap { it.matches }?.firstOrNull { it.id == selected }
 
+    androidx.compose.runtime.CompositionLocalProvider(LocalFavoriteTeams provides favoriteTeams) {
     ScoresContent(
         state = state,
         selectedMatch = selectedMatch,
@@ -107,6 +114,7 @@ fun MainScreen(
     )
     sheet?.let {
         StreamSheet(state = it, onDismiss = viewModel::dismissStreams)
+    }
     }
 }
 
@@ -563,14 +571,19 @@ private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier =
         modifier = modifier,
     ) {
         val label = team.abbreviation.ifBlank { team.shortName }
+        val fav = isFavoriteTeam(team)
         val name = @Composable {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!alignStart && fav) { FavStar(); Spacer(Modifier.width(4.dp)) }
+                Text(
+                    label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                if (alignStart && fav) { Spacer(Modifier.width(4.dp)); FavStar() }
+            }
         }
         val crest = @Composable {
             Crest(team.logoUrl, Modifier.size(38.dp))
@@ -584,19 +597,47 @@ private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier =
 }
 
 @Composable
+private fun FavStar() {
+    Icon(
+        Icons.Filled.Star,
+        contentDescription = "Favorite",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(13.dp),
+    )
+}
+
+@Composable
+private fun isFavoriteTeam(team: MatchTeam): Boolean {
+    val favs = LocalFavoriteTeams.current
+    if (favs.isEmpty()) return false
+    val n = team.name.lowercase()
+    return favs.any { n.contains(it) || it.contains(n) }
+}
+
+@Composable
 private fun ScoreText(match: Match, team: MatchTeam, dim: Boolean) {
     if (match.state == MatchState.UPCOMING) {
         Spacer(Modifier.width(8.dp))
         return
     }
-    Text(
-        text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" },
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.ExtraBold,
-        maxLines = 1,
-        color = if (dim) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+    val score = cleanScore(team.score)
+    val color = if (dim) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+    AnimatedContent(
+        targetState = score,
+        transitionSpec = {
+            (slideInVertically { -it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
+        },
+        label = "score",
         modifier = Modifier.padding(horizontal = 12.dp),
-    )
+    ) { s ->
+        Text(
+            text = s,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+            color = color,
+        )
+    }
 }
 
 @Composable

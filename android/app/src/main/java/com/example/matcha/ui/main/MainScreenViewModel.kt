@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,6 +32,12 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _streamSheet = MutableStateFlow<StreamSheetState?>(null)
     val streamSheet: StateFlow<StreamSheetState?> = _streamSheet.asStateFlow()
+
+    /** Lowercased favorite team terms, for the "My Teams" star indicator. */
+    val favoriteTeams: StateFlow<Set<String>> =
+        favorites.favoriteTeamNames
+            .map { names -> names.map { it.lowercase() }.toSet() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     /** Combined favorites snapshot, re-fetched whenever the user changes them. */
     private val favoriteSnapshot: StateFlow<FavoriteSnapshot> =
