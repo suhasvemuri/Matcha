@@ -35,6 +35,12 @@ data class EspnCompetition(
     val competitors: List<EspnCompetitor> = emptyList(),
     val venue: EspnVenue? = null,
     val status: EspnStatus? = null,
+    val broadcasts: List<EspnBroadcast> = emptyList(),
+)
+
+@Serializable
+data class EspnBroadcast(
+    val names: List<String> = emptyList(),
 )
 
 @Serializable
@@ -48,7 +54,15 @@ data class EspnCompetitor(
     val homeAway: String? = null,
     val score: String? = null,
     val winner: Boolean? = null,
+    val form: String? = null,
+    val records: List<EspnRecord> = emptyList(),
     val team: EspnTeam? = null,
+)
+
+@Serializable
+data class EspnRecord(
+    val type: String? = null,
+    val summary: String? = null,
 )
 
 @Serializable
@@ -59,6 +73,7 @@ data class EspnTeam(
     val abbreviation: String? = null,
     val logo: String? = null,
     val color: String? = null,
+    val alternateColor: String? = null,
 )
 
 @Serializable

@@ -95,8 +95,14 @@ private fun EspnEvent.toMatch(league: League): Match? {
             logoUrl = t?.logo,
             score = c.score,
             isWinner = c.winner == true,
+            colorArgb = parseColor(t?.color),
+            record = c.records.firstOrNull { it.type == "total" }?.summary
+                ?: c.records.firstOrNull()?.summary,
+            form = c.form,
         )
     }
+
+    val broadcast = comp.broadcasts.firstOrNull()?.names?.firstOrNull()
 
     return Match(
         id = "${league.id}-$id",
@@ -109,5 +115,13 @@ private fun EspnEvent.toMatch(league: League): Match? {
         state = state,
         statusDetail = detail,
         venue = comp.venue?.fullName,
+        broadcast = broadcast,
     )
+}
+
+/** ESPN colors arrive as "RRGGBB" hex without a leading '#'. */
+private fun parseColor(hex: String?): Long? {
+    val clean = hex?.trim()?.removePrefix("#") ?: return null
+    if (clean.length != 6) return null
+    return runCatching { 0xFF000000L or clean.toLong(16) }.getOrNull()
 }

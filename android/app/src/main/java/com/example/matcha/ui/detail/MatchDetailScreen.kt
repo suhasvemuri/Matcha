@@ -67,6 +67,7 @@ fun MatchDetailContent(
         }
 
         Spacer(Modifier.height(28.dp))
+        match.broadcast?.takeIf { it.isNotBlank() }?.let { InfoRow("Watch on", it) }
         match.venue?.takeIf { it.isNotBlank() }?.let { InfoRow("Venue", it) }
         InfoRow("Kickoff", formatKickoff(match.kickoffEpochMs))
         InfoRow("Competition", match.leagueName)
@@ -110,6 +111,20 @@ private fun TeamCrest(team: MatchTeam, modifier: Modifier = Modifier) {
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        team.record?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        team.form?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = it.takeLast(5),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

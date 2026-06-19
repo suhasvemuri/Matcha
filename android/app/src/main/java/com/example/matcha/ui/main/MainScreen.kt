@@ -15,10 +15,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -217,19 +220,29 @@ private fun MatchRow(match: Match, onClick: () -> Unit, modifier: Modifier = Mod
         shape = MaterialTheme.shapes.large,
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TeamLine(match.home, match.state)
-                TeamLine(match.away, match.state)
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            // Team-color accent strip (home on top, away below).
+            Column(Modifier.width(5.dp).fillMaxHeight()) {
+                Box(Modifier.weight(1f).fillMaxWidth().background(teamColor(match.home, MaterialTheme.colorScheme.primary)))
+                Box(Modifier.weight(1f).fillMaxWidth().background(teamColor(match.away, MaterialTheme.colorScheme.tertiary)))
             }
-            Spacer(Modifier.width(10.dp))
-            StatusBadge(match)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TeamLine(match.home, match.state)
+                    TeamLine(match.away, match.state)
+                }
+                Spacer(Modifier.width(10.dp))
+                StatusBadge(match)
+            }
         }
     }
 }
+
+private fun teamColor(team: MatchTeam, fallback: Color): Color =
+    team.colorArgb?.let { Color(it) } ?: fallback
 
 @Composable
 private fun TeamLine(team: MatchTeam, state: MatchState) {

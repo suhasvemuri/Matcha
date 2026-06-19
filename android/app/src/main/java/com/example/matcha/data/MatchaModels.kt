@@ -11,6 +11,12 @@ data class MatchTeam(
     val logoUrl: String?,
     val score: String?,
     val isWinner: Boolean,
+    /** Team brand color as a 0xAARRGGBB int, or null if unknown. */
+    val colorArgb: Long? = null,
+    /** Record summary, e.g. "2-1-1" (W-D-L), or null. */
+    val record: String? = null,
+    /** Recent form string, e.g. "WWDLW", or null. */
+    val form: String? = null,
 )
 
 /** A single match, decoupled from the ESPN payload shape. */
@@ -27,6 +33,8 @@ data class Match(
     /** e.g. "45'", "HT", "Final", "Today 7:00 PM". */
     val statusDetail: String,
     val venue: String?,
+    /** Broadcast network(s), e.g. "FOX", or null. */
+    val broadcast: String? = null,
 ) {
     val isLive: Boolean get() = state == MatchState.LIVE
 }
