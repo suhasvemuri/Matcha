@@ -54,16 +54,21 @@ val MatchaDarkColors = darkColorScheme(
     onError = Color(0xFF000000),
     errorContainer = Color(0xFF3A0E0E),
     onErrorContainer = Color(0xFFFFB4AB),
-    background = Color(0xFF000000),
+    // Apple Sports themes the canvas by competition; Matcha's brand is green.
+    background = Color(0xFF06140C),
     onBackground = Color(0xFFFFFFFF),
-    surface = Color(0xFF000000),
+    surface = Color(0xFF06140C),
     onSurface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFF1C1C1E),
-    onSurfaceVariant = Color(0xFF8E8E93), // Apple secondary gray
-    outline = Color(0xFF3A3A3C),
-    surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerLow = Color(0xFF141416),
-    surfaceContainer = Color(0xFF1C1C1E),
-    surfaceContainerHigh = Color(0xFF2C2C2E),
-    surfaceContainerHighest = Color(0xFF3A3A3C),
+    surfaceVariant = Color(0xFF18271D),
+    onSurfaceVariant = Color(0xFF9AA89E), // muted green-gray secondary
+    outline = Color(0xFF38463C),
+    surfaceContainerLowest = Color(0xFF030C07),
+    surfaceContainerLow = Color(0xFF0E1C13),
+    surfaceContainer = Color(0xFF16241B),
+    surfaceContainerHigh = Color(0xFF1F2E24),
+    surfaceContainerHighest = Color(0xFF2A3A2F),
 )
+
+/** Gradient colors for the Apple Sports-style themed canvas (top → bottom). */
+val MatchaGradientTop = Color(0xFF0E3A22)
+val MatchaGradientBottom = Color(0xFF05100A)

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -222,60 +223,63 @@ private fun MatchRow(match: Match, onClick: () -> Unit, modifier: Modifier = Mod
     val awayDim = decided && awayScore!! < homeScore!!
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
         shape = MaterialTheme.shapes.large,
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
+        // Apple Sports horizontal card: crest+abbr | score | center status | score | abbr+crest
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 16.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TeamLine(match.home, match.state, dim = homeDim)
-                TeamLine(match.away, match.state, dim = awayDim)
-            }
-            Spacer(Modifier.width(12.dp))
-            StatusColumn(match)
+            TeamBadge(match.home, alignStart = true, modifier = Modifier.weight(1f))
+            ScoreText(match, match.home, dim = homeDim)
+            CenterStatus(match)
+            ScoreText(match, match.away, dim = awayDim)
+            TeamBadge(match.away, alignStart = false, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun TeamLine(team: MatchTeam, state: MatchState, dim: Boolean) {
-    val contentColor = if (dim) MaterialTheme.colorScheme.onSurfaceVariant
-    else MaterialTheme.colorScheme.onSurface
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        AsyncImage(
-            model = team.logoUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.size(26.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = team.name,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = contentColor,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        if (state != MatchState.UPCOMING) {
-            Text(
-                // Cricket scores arrive verbose ("161/5 (18/20 ov)"); show the lead.
-                text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" },
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                color = contentColor,
-            )
+private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (alignStart) Arrangement.Start else Arrangement.End,
+        modifier = modifier,
+    ) {
+        val label = team.abbreviation.ifBlank { team.shortName }
+        if (alignStart) {
+            AsyncImage(team.logoUrl, null, Modifier.size(30.dp), contentScale = ContentScale.Fit)
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        } else {
+            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            Spacer(Modifier.width(8.dp))
+            AsyncImage(team.logoUrl, null, Modifier.size(30.dp), contentScale = ContentScale.Fit)
         }
     }
 }
 
 @Composable
-private fun StatusColumn(match: Match) {
-    Box(Modifier.width(66.dp), contentAlignment = Alignment.Center) {
+private fun ScoreText(match: Match, team: MatchTeam, dim: Boolean) {
+    if (match.state == MatchState.UPCOMING) {
+        Spacer(Modifier.width(8.dp))
+        return
+    }
+    Text(
+        text = team.score?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" },
+        style = MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        color = if (dim) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(horizontal = 10.dp),
+    )
+}
+
+@Composable
+private fun CenterStatus(match: Match) {
+    Box(Modifier.widthIn(min = 54.dp), contentAlignment = Alignment.Center) {
         when (match.state) {
             MatchState.LIVE -> LiveStatus(match.statusDetail.ifBlank { "LIVE" })
             MatchState.FINAL -> Text(
@@ -284,6 +288,7 @@ private fun StatusColumn(match: Match) {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
             )
             MatchState.UPCOMING -> Text(
                 kickoffLabel(match.kickoffEpochMs).ifBlank { match.statusDetail.ifBlank { "—" } },
@@ -306,18 +311,17 @@ private fun LiveStatus(label: String) {
         animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
         label = "pulse",
     )
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(7.dp).clip(CircleShape)
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = pulse)),
         )
-        Spacer(Modifier.size(4.dp))
+        Spacer(Modifier.width(4.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             maxLines = 1,
         )
     }

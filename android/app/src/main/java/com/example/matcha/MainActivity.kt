@@ -8,11 +8,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.core.content.ContextCompat
+import com.example.matcha.theme.MatchaGradientBottom
+import com.example.matcha.theme.MatchaGradientTop
 import com.example.matcha.theme.MatchaTheme
 
 class MainActivity : ComponentActivity() {
@@ -26,7 +30,14 @@ class MainActivity : ComponentActivity() {
     maybeRequestNotificationPermission()
     enableEdgeToEdge()
     setContent {
-      MatchaTheme { Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() } }
+      MatchaTheme {
+        Surface(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(MatchaGradientTop, MatchaGradientBottom))),
+          color = androidx.compose.ui.graphics.Color.Transparent,
+        ) { MainNavigation() }
+      }
     }
   }
 
