@@ -75,6 +75,7 @@ import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchTeam
 import com.example.matcha.data.streaming.StreamOption
 import com.example.matcha.theme.CompetitionThemes
+import com.example.matcha.ui.common.Crest
 import com.example.matcha.ui.detail.MatchDetailContent
 import com.example.matcha.ui.detail.MatchDetailPlaceholder
 
@@ -86,6 +87,7 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val sheet by viewModel.streamSheet.collectAsStateWithLifecycle()
+    val refreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     var selected by rememberSaveable(stateSaver = MatchIdSaver) { mutableStateOf<String?>(null) }
 
     val selectedMatch = (state as? ScoresUiState.Success)?.groups
@@ -94,6 +96,8 @@ fun MainScreen(
     ScoresContent(
         state = state,
         selectedMatch = selectedMatch,
+        isRefreshing = refreshing,
+        onRefresh = viewModel::refresh,
         onSelect = { selected = it.id },
         onClearSelection = { selected = null },
         onWatch = viewModel::showStreams,
@@ -115,6 +119,8 @@ private val MatchIdSaver = androidx.compose.runtime.saveable.Saver<String?, Stri
 private fun ScoresContent(
     state: ScoresUiState,
     selectedMatch: Match?,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onSelect: (Match) -> Unit,
     onClearSelection: () -> Unit,
     onWatch: (Match) -> Unit,
@@ -169,7 +175,7 @@ private fun ScoresContent(
                     val listWeight = if (hinge > 0.dp) 0.5f else 0.42f
                     Row(Modifier.fillMaxSize()) {
                         Box(Modifier.weight(listWeight).fillMaxSize()) {
-                            ScoresPane(displayState, onTap, accent)
+                            ScoresPane(displayState, onTap, accent, isRefreshing, onRefresh)
                         }
                         Spacer(Modifier.width(if (hinge > 0.dp) hinge else 14.dp))
                         Surface(
@@ -197,10 +203,10 @@ private fun ScoresContent(
                         label = "list-detail",
                     ) { detail ->
                         if (detail == null) {
-                            ScoresPane(displayState, onTap, accent)
+                            ScoresPane(displayState, onTap, accent, isRefreshing, onRefresh)
                         } else {
                             BackHandler(enabled = true, onBack = onClearSelection)
-                            MatchDetailContent(detail, onWatch, onOpenBracket = bracketCallback(detail, onOpenBracket))
+                            MatchDetailContent(detail, onWatch, onOpenBracket = bracketCallback(detail, onOpenBracket), onBack = onClearSelection)
                         }
                     }
                 }
@@ -302,19 +308,58 @@ private fun filterByDate(state: ScoresUiState, tab: DateTab): ScoresUiState {
     return if (filtered.isEmpty()) ScoresUiState.Empty else ScoresUiState.Success(filtered)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit, accent: Color) {
-    Crossfade(targetState = state::class, label = "scores") { _ ->
-        when (state) {
-            ScoresUiState.Loading -> CenteredBox { CircularProgressIndicator(color = accent) }
-            ScoresUiState.Empty -> CenteredBox {
-                Text(
-                    "No matches in your favorites right now.\nPick teams and competitions to follow.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+private fun ScoresPane(
+    state: ScoresUiState,
+    onTap: (Match) -> Unit,
+    accent: Color,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+) {
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        Crossfade(targetState = state::class, label = "scores") { _ ->
+            when (state) {
+                ScoresUiState.Loading -> SkeletonList()
+                ScoresUiState.Empty -> CenteredBox {
+                    Text(
+                        "No matches in your favorites right now.\nPick teams and competitions to follow.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                is ScoresUiState.Success -> ScoresList(state.groups, onTap, accent)
             }
-            is ScoresUiState.Success -> ScoresList(state.groups, onTap, accent)
+        }
+    }
+}
+
+/** Shimmer skeleton placeholder while scores load. */
+@Composable
+private fun SkeletonList() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val x by transition.animateFloat(
+        initialValue = -500f, targetValue = 1200f,
+        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Restart), label = "x",
+    )
+    val base = MaterialTheme.colorScheme.surfaceVariant
+    val highlight = MaterialTheme.colorScheme.surfaceContainerHigh
+    val brush = Brush.linearGradient(
+        colors = listOf(base, highlight, base),
+        start = androidx.compose.ui.geometry.Offset(x, 0f),
+        end = androidx.compose.ui.geometry.Offset(x + 400f, 0f),
+    )
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(8.dp))
+        repeat(6) {
+            Box(
+                Modifier.fillMaxWidth().height(if (it == 0) 96.dp else 64.dp)
+                    .clip(MaterialTheme.shapes.large).background(brush),
+            )
         }
     }
 }
@@ -443,7 +488,7 @@ private fun HeroMatchRow(match: Match, accent: Color, onClick: () -> Unit, modif
 @Composable
 private fun HeroTeam(team: MatchTeam, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        AsyncImage(team.logoUrl, null, Modifier.size(52.dp), contentScale = ContentScale.Fit)
+        Crest(team.logoUrl, Modifier.size(52.dp))
         Spacer(Modifier.height(8.dp))
         Text(
             team.shortName,
@@ -477,7 +522,7 @@ private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier =
             )
         }
         val crest = @Composable {
-            AsyncImage(team.logoUrl, null, Modifier.size(38.dp), contentScale = ContentScale.Fit)
+            Crest(team.logoUrl, Modifier.size(38.dp))
         }
         if (alignStart) {
             crest(); Spacer(Modifier.width(12.dp)); name()

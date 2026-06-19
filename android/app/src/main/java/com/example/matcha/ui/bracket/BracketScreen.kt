@@ -1,5 +1,6 @@
 package com.example.matcha.ui.bracket
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,7 +49,16 @@ fun BracketScreen(leagueId: String, onBack: () -> Unit) {
             ?: emptyList()
     }
 
+    val theme = com.example.matcha.theme.CompetitionThemes.forLeague(leagueId)
+    androidx.compose.foundation.layout.Box(
+        Modifier.fillMaxSize().background(
+            androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to theme.gradientTop, 0.4f to theme.gradientBottom, 1f to MaterialTheme.colorScheme.background,
+            ),
+        ),
+    ) {
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("${league?.displayName ?: "Tournament"} Bracket") },
@@ -57,6 +67,9 @@ fun BracketScreen(leagueId: String, onBack: () -> Unit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                ),
             )
         },
     ) { padding ->
@@ -78,6 +91,7 @@ fun BracketScreen(leagueId: String, onBack: () -> Unit) {
                 data.forEach { round -> RoundColumn(round) }
             }
         }
+    }
     }
 }
 
@@ -119,7 +133,7 @@ private fun BracketTeamRow(team: BracketTeam, decided: Boolean) {
     val dim = decided && !team.winner
     val color = if (dim) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     Row(verticalAlignment = Alignment.CenterVertically) {
-        AsyncImage(team.logoUrl, null, Modifier.size(20.dp))
+        com.example.matcha.ui.common.Crest(team.logoUrl, Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text(
             team.name,

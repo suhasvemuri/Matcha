@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -59,6 +60,7 @@ fun MatchDetailContent(
     onWatch: (Match) -> Unit,
     modifier: Modifier = Modifier,
     onOpenBracket: ((String) -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     val extras by produceState(initialValue = MatchExtras(), match.id) {
         value = runCatching { EspnDetailApi().fetch(match) }.getOrDefault(MatchExtras())
@@ -77,6 +79,18 @@ fun MatchDetailContent(
                 ),
             ),
         ) {
+            onBack?.let { back ->
+                androidx.compose.material3.IconButton(
+                    onClick = back,
+                    modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
+                ) {
+                    androidx.compose.material3.Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                    )
+                }
+            }
             Column(
                 Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 24.dp, start = 20.dp, end = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -232,7 +246,7 @@ private fun StandingRowView(row: StandingRow) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(bg).padding(vertical = 7.dp, horizontal = 4.dp),
     ) {
-        AsyncImage(row.logoUrl, null, Modifier.size(18.dp), contentScale = ContentScale.Fit)
+        com.example.matcha.ui.common.Crest(row.logoUrl, Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(row.teamName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
         Cell(row.played.toString(), 24.dp)
@@ -269,12 +283,7 @@ private fun StatusLine(match: Match) {
 @Composable
 private fun TeamCrest(team: MatchTeam, modifier: Modifier = Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        AsyncImage(
-            model = team.logoUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.size(64.dp).clip(CircleShape),
-        )
+        com.example.matcha.ui.common.Crest(team.logoUrl, Modifier.size(64.dp))
         Spacer(Modifier.height(8.dp))
         Text(
             text = team.name,
