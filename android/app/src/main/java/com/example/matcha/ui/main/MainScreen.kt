@@ -10,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -158,15 +159,18 @@ private fun ScoresContent(
                 }
 
                 if (twoPane) {
+                    val hinge = rememberHingeWidthDp()
+                    // Equal panes around a real hinge; weighted otherwise.
+                    val listWeight = if (hinge > 0.dp) 0.5f else 0.42f
                     Row(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(0.42f).fillMaxSize()) {
+                        Box(Modifier.weight(listWeight).fillMaxSize()) {
                             ScoresPane(displayState, onTap, accent)
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(if (hinge > 0.dp) hinge else 14.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceContainer,
                             shape = MaterialTheme.shapes.extraLarge,
-                            modifier = Modifier.weight(0.58f).fillMaxSize(),
+                            modifier = Modifier.weight(1f - listWeight).fillMaxSize(),
                         ) {
                             if (selectedMatch != null) {
                                 MatchDetailContent(selectedMatch, onWatch, onOpenBracket = bracketCallback(selectedMatch, onOpenBracket))
@@ -302,6 +306,11 @@ private fun ScoresPane(state: ScoresUiState, onTap: (Match) -> Unit, accent: Col
 
 @Composable
 private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit, accent: Color) {
+    // Feature the first live match (else the first match overall) as a hero.
+    val allMatches = remember(groups) { groups.flatMap { it.matches } }
+    val heroId = remember(allMatches) {
+        (allMatches.firstOrNull { it.state == MatchState.LIVE } ?: allMatches.firstOrNull())?.id
+    }
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
@@ -311,11 +320,25 @@ private fun ScoresList(groups: List<LeagueMatches>, onWatch: (Match) -> Unit, ac
                 LeagueHeader(group, accent, Modifier.animateItem())
             }
             items(group.matches, key = { it.id }) { match ->
-                MatchRow(match, accent, onClick = { onWatch(match) }, modifier = Modifier.animateItem())
+                if (match.id == heroId) {
+                    HeroMatchRow(match, accent, onClick = { onWatch(match) }, modifier = Modifier.animateItem())
+                } else {
+                    MatchRow(match, accent, onClick = { onWatch(match) }, modifier = Modifier.animateItem())
+                }
             }
         }
     }
 }
+
+/** Subtle frosted-glass card surface with a faint team-color wash. */
+private fun Modifier.frostedCard(home: Color, away: Color, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    this.clip(shape)
+        .background(Brush.horizontalGradient(listOf(home.copy(alpha = 0.16f), away.copy(alpha = 0.16f))))
+        .background(Color.White.copy(alpha = 0.06f))
+        .border(1.dp, Color.White.copy(alpha = 0.10f), shape)
+
+private fun teamColorOf(team: MatchTeam, fallback: Color): Color =
+    team.colorArgb?.let { Color(it) } ?: fallback
 
 @Composable
 private fun LeagueHeader(group: LeagueMatches, accent: Color, modifier: Modifier = Modifier) {
@@ -338,25 +361,88 @@ private fun MatchRow(match: Match, accent: Color, onClick: () -> Unit, modifier:
     val decided = match.state != MatchState.UPCOMING && homeScore != null && awayScore != null
     val homeDim = decided && homeScore!! < awayScore!!
     val awayDim = decided && awayScore!! < homeScore!!
+    val shape = MaterialTheme.shapes.large
 
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth()
+            .frostedCard(teamColorOf(match.home, accent), teamColorOf(match.away, accent), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 15.dp),
     ) {
-        // Apple Sports horizontal card: crest+abbr | score | center status | score | abbr+crest
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-        ) {
-            TeamBadge(match.home, alignStart = true, modifier = Modifier.weight(1f))
-            ScoreText(match, match.home, dim = homeDim)
-            CenterStatus(match, accent)
-            ScoreText(match, match.away, dim = awayDim)
-            TeamBadge(match.away, alignStart = false, modifier = Modifier.weight(1f))
-        }
+        TeamBadge(match.home, alignStart = true, modifier = Modifier.weight(1f))
+        ScoreText(match, match.home, dim = homeDim)
+        CenterStatus(match, accent)
+        ScoreText(match, match.away, dim = awayDim)
+        TeamBadge(match.away, alignStart = false, modifier = Modifier.weight(1f))
     }
 }
+
+/** Larger featured card for the top live/next match. */
+@Composable
+private fun HeroMatchRow(match: Match, accent: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val homeColor = teamColorOf(match.home, accent)
+    val awayColor = teamColorOf(match.away, accent)
+    val homeScore = leadingScore(match.home.score)
+    val awayScore = leadingScore(match.away.score)
+    val decided = match.state != MatchState.UPCOMING && homeScore != null && awayScore != null
+    val shape = MaterialTheme.shapes.extraLarge
+
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(homeColor.copy(alpha = 0.42f), awayColor.copy(alpha = 0.42f))))
+            .background(Color.Black.copy(alpha = 0.18f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            HeroTeam(match.home, Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+                if (match.state == MatchState.UPCOMING) {
+                    Text("vs", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                } else {
+                    Text(
+                        "${cleanScore(match.home.score)} – ${cleanScore(match.away.score)}",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                when (match.state) {
+                    MatchState.LIVE -> LiveStatus(match.statusDetail.ifBlank { "LIVE" }, Color.White)
+                    MatchState.FINAL -> Text("Final", style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.85f))
+                    MatchState.UPCOMING -> Text(kickoffLabel(match.kickoffEpochMs), style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.85f))
+                }
+            }
+            HeroTeam(match.away, Modifier.weight(1f))
+        }
+        if (decided) Unit
+    }
+}
+
+@Composable
+private fun HeroTeam(team: MatchTeam, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        AsyncImage(team.logoUrl, null, Modifier.size(52.dp), contentScale = ContentScale.Fit)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            team.shortName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+    }
+}
+
+private fun cleanScore(raw: String?): String =
+    raw?.substringBefore(" (")?.trim().orEmpty().ifBlank { "0" }
 
 @Composable
 private fun TeamBadge(team: MatchTeam, alignStart: Boolean, modifier: Modifier = Modifier) {
