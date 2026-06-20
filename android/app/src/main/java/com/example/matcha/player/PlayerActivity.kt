@@ -207,30 +207,47 @@ class PlayerActivity : ComponentActivity() {
             layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.databaseEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             settings.userAgentString = DESKTOP_UA
-            settings.setSupportMultipleWindows(false) // no ad popups
+            // Present as a full browser: streamed.st's anti-bot shield otherwise
+            // mistakes a locked-down WebView for a sandboxed iframe and replaces
+            // the player with "Remove sandbox attributes on the iframe tag". So we
+            // allow popups (capability present — we just swallow the actual window)
+            // and accept cookies/storage like a real browser would.
+            settings.setSupportMultipleWindows(true)
+            settings.javaScriptCanOpenWindowsAutomatically = true
+            val cookies = android.webkit.CookieManager.getInstance()
+            cookies.setAcceptCookie(true)
+            runCatching { cookies.setAcceptThirdPartyCookies(this, true) }
             setBackgroundColor(0xFF000000.toInt())
             visibility = View.INVISIBLE // hidden until we decide
-            // embed.st nests the Clappr player in a sandboxed <iframe>, which the
-            // player refuses to run in ("Remove sandbox attributes…"). Neutralize
-            // the sandbox before the page's scripts create that iframe so the
-            // stream actually plays (both for extraction and the WebView player).
+            // Best-effort un-sandbox of any nested player iframe (harmless if none).
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 runCatching {
                     WebViewCompat.addDocumentStartJavaScript(this, UNSANDBOX_JS, setOf("*"))
                 }
             }
             webChromeClient = object : WebChromeClient() {
-                // Swallow window.open() / target=_blank ad popups.
+                // window.open() must "succeed" so the shield sees popup capability,
+                // but route it to a throwaway WebView so no ad page is shown.
                 override fun onCreateWindow(
                     view: WebView?,
                     isDialog: Boolean,
                     isUserGesture: Boolean,
                     resultMsg: android.os.Message?,
-                ): Boolean = false
+                ): Boolean {
+                    val transient = WebView(this@PlayerActivity)
+                    transient.webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean = true
+                    }
+                    val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                    transport.webView = transient
+                    resultMsg.sendToTarget()
+                    return true
+                }
 
                 // Support the embed's own HTML5 fullscreen button.
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -269,15 +286,17 @@ class PlayerActivity : ComponentActivity() {
                     return super.shouldInterceptRequest(view, request)
                 }
 
-                // Keep navigation on the embed host; block cross-origin ad jumps.
+                // Only stop the TOP frame from being yanked to an ad site; let
+                // all sub-frames / shield resources load so the player initializes.
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean {
-                    val host = request?.url?.host ?: return false
+                    if (request?.isForMainFrame != true) return false
+                    val host = request.url?.host ?: return false
                     val ok = embedHost == null || host.contains("embed.st") ||
                         host.contains("streamed") || host == embedHost
-                    return !ok // true = block the navigation
+                    return !ok // true = block the top-frame navigation
                 }
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
