@@ -130,9 +130,17 @@ class PlayerActivity : ComponentActivity() {
             .setUserAgent(DESKTOP_UA)
             .setDefaultRequestProperties(
                 buildMap {
+                    // Default to the embed origin, then let the captured request's
+                    // own headers win (correct Referer/Origin for this stream).
                     put("Referer", "https://embed.st/")
-                    headers["Referer"]?.let { put("Referer", it) }
-                    headers["Origin"]?.let { put("Origin", it) }
+                    put("Origin", "https://embed.st")
+                    headers.forEach { (k, v) ->
+                        if (!k.equals("Accept-Encoding", true) && v.isNotBlank()) put(k, v)
+                    }
+                    // The stream's CDN gates segments on the WebView's session
+                    // cookies (otherwise 503); forward them to ExoPlayer.
+                    runCatching { android.webkit.CookieManager.getInstance().getCookie(url) }
+                        .getOrNull()?.takeIf { it.isNotBlank() }?.let { put("Cookie", it) }
                 },
             )
         val player = ExoPlayer.Builder(this)
@@ -196,7 +204,8 @@ class PlayerActivity : ComponentActivity() {
         val wv = webView
         if (wv == null) { finish(); return }
         wv.visibility = View.VISIBLE
-        // Un-mute and (re)start playback inside the page.
+        // Strip the anti-embed nag, reveal the player, and (re)start playback.
+        wv.evaluateJavascript(DESHIELD_JS, null)
         wv.evaluateJavascript(AUTOPLAY_JS, null)
         topBar?.let { it.bringToFront() }
     }
@@ -219,6 +228,10 @@ class PlayerActivity : ComponentActivity() {
             // and accept cookies/storage like a real browser would.
             settings.setSupportMultipleWindows(true)
             settings.javaScriptCanOpenWindowsAutomatically = true
+            // The shield's verification/ad frames are http on an https page; if
+            // the browser blocks them as mixed content the shield assumes adblock
+            // /sandbox and shows the error. Allow mixed content so it passes.
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             val cookies = android.webkit.CookieManager.getInstance()
             cookies.setAcceptCookie(true)
             runCatching { cookies.setAcceptThirdPartyCookies(this, true) }
@@ -307,6 +320,7 @@ class PlayerActivity : ComponentActivity() {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     view?.evaluateJavascript(UNSANDBOX_JS, null)
+                    view?.evaluateJavascript(DESHIELD_JS, null)
                     // Nudge autoplay so the playlist is requested promptly.
                     view?.evaluateJavascript(AUTOPLAY_JS, null)
                 }
@@ -495,6 +509,23 @@ class PlayerActivity : ComponentActivity() {
                 "(m.addedNodes||[]).forEach(strip);});}).observe(document.documentElement||document," +
                 "{childList:true,subtree:true,attributes:true,attributeFilter:['sandbox']});}catch(e){}" +
                 "try{strip(document);}catch(e){}})();"
+
+        /**
+         * Anti-embed shields on these pages overlay a red "Remove sandbox
+         * attributes…" nag over the (working) Clappr player. Strip the nag text
+         * and force the #player div visible, on an interval so it stays clean.
+         */
+        private const val DESHIELD_JS =
+            "(function(){if(window.__mDesh)return;window.__mDesh=1;var bad=/sandbox|iframe tag|AppleWebKit\\/537/i;" +
+                "function clean(){try{if(!document.body)return;" +
+                "Array.prototype.slice.call(document.body.childNodes).forEach(function(n){" +
+                "if(n.nodeType===3&&bad.test(n.textContent||''))n.parentNode.removeChild(n);});" +
+                "document.querySelectorAll('body>*').forEach(function(el){" +
+                "if(el.id!=='player'&&el.tagName!=='SCRIPT'&&bad.test(el.textContent||'')&&!el.querySelector('#player,video'))el.remove();});" +
+                "document.body.style.color='transparent';" +
+                "var p=document.getElementById('player');if(p){p.style.cssText='height:100vh;width:100vw;display:block;visibility:visible';}" +
+                "document.querySelectorAll('video').forEach(function(v){v.style.display='block';v.muted=false;var r=v.play&&v.play();if(r&&r.catch)r.catch(function(){});});" +
+                "}catch(e){}}setInterval(clean,500);clean();})();"
 
         /** Unmute + start any <video> and click common play buttons. */
         private const val AUTOPLAY_JS =
