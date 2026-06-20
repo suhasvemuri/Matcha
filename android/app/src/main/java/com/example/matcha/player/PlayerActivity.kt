@@ -34,7 +34,14 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 
 /**
  * Immersive stream player with Picture-in-Picture.
@@ -67,6 +74,20 @@ class PlayerActivity : ComponentActivity() {
     private var webFallbackActive = false
     private var embedHost: String? = null
     private val main = Handler(Looper.getMainLooper())
+
+    /** The resolved playable URL (direct or extracted .m3u8) — what we cast. */
+    private var castMediaUrl: String? = null
+    private val sessionListener = object : SessionManagerListener<CastSession> {
+        override fun onSessionStarted(session: CastSession, sessionId: String) = loadRemoteMedia(session)
+        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = loadRemoteMedia(session)
+        override fun onSessionEnded(session: CastSession, error: Int) { exoPlayer?.play() }
+        override fun onSessionStarting(session: CastSession) {}
+        override fun onSessionStartFailed(session: CastSession, error: Int) {}
+        override fun onSessionEnding(session: CastSession) {}
+        override fun onSessionResuming(session: CastSession, sessionId: String) {}
+        override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+        override fun onSessionSuspended(session: CastSession, reason: Int) {}
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +122,7 @@ class PlayerActivity : ComponentActivity() {
     private fun playNative(url: String, headers: Map<String, String>) {
         if (nativePlaying || webFallbackActive) return
         nativePlaying = true
+        castMediaUrl = url // now castable
         spinner?.let { root.removeView(it) }
 
         val httpFactory = DefaultHttpDataSource.Factory()
@@ -192,6 +214,15 @@ class PlayerActivity : ComponentActivity() {
             settings.setSupportMultipleWindows(false) // no ad popups
             setBackgroundColor(0xFF000000.toInt())
             visibility = View.INVISIBLE // hidden until we decide
+            // embed.st nests the Clappr player in a sandboxed <iframe>, which the
+            // player refuses to run in ("Remove sandbox attributes…"). Neutralize
+            // the sandbox before the page's scripts create that iframe so the
+            // stream actually plays (both for extraction and the WebView player).
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                runCatching {
+                    WebViewCompat.addDocumentStartJavaScript(this, UNSANDBOX_JS, setOf("*"))
+                }
+            }
             webChromeClient = object : WebChromeClient() {
                 // Swallow window.open() / target=_blank ad popups.
                 override fun onCreateWindow(
@@ -249,7 +280,14 @@ class PlayerActivity : ComponentActivity() {
                     return !ok // true = block the navigation
                 }
 
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    // Belt-and-suspenders un-sandbox for WebViews without
+                    // DOCUMENT_START_SCRIPT support.
+                    view?.evaluateJavascript(UNSANDBOX_JS, null)
+                }
+
                 override fun onPageFinished(view: WebView?, url: String?) {
+                    view?.evaluateJavascript(UNSANDBOX_JS, null)
                     // Nudge autoplay so the playlist is requested promptly.
                     view?.evaluateJavascript(AUTOPLAY_JS, null)
                 }
@@ -295,6 +333,19 @@ class PlayerActivity : ComponentActivity() {
         }
         bar.addView(back)
         bar.addView(titleView)
+        val pip = android.widget.TextView(this).apply {
+            text = "⧉" // enter Picture-in-Picture
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 19f
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            contentDescription = "Picture in picture"
+            setOnClickListener { enterPip() }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            bar.addView(pip)
+        }
         runCatching {
             val themed = android.view.ContextThemeWrapper(this, androidx.mediarouter.R.style.Theme_MediaRouter)
             val cast = androidx.mediarouter.app.MediaRouteButton(themed).apply {
@@ -308,6 +359,42 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    // --- Cast ---------------------------------------------------------------
+
+    /** Hand the current playable stream to the connected Cast device. */
+    private fun loadRemoteMedia(session: CastSession) {
+        val url = castMediaUrl ?: return
+        val rmc = session.remoteMediaClient ?: return
+        val meta = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
+            putString(MediaMetadata.KEY_TITLE, intent.getStringExtra(EXTRA_TITLE) ?: "Live stream")
+        }
+        val info = MediaInfo.Builder(url)
+            .setStreamType(MediaInfo.STREAM_TYPE_LIVE)
+            .setContentType("application/x-mpegURL")
+            .setMetadata(meta)
+            .build()
+        val request = MediaLoadRequestData.Builder().setMediaInfo(info).setAutoplay(true).build()
+        runCatching { rmc.load(request) }
+        exoPlayer?.pause() // local pauses while it plays on the TV
+    }
+
+    private fun registerCast() {
+        runCatching {
+            val cc = CastContext.getSharedInstance(this)
+            cc.sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
+            cc.sessionManager.currentCastSession
+                ?.takeIf { it.isConnected }
+                ?.let { loadRemoteMedia(it) }
+        }
+    }
+
+    private fun unregisterCast() {
+        runCatching {
+            CastContext.getSharedInstance(this).sessionManager
+                .removeSessionManagerListener(sessionListener, CastSession::class.java)
+        }
+    }
 
     // --- Picture-in-Picture -------------------------------------------------
 
@@ -346,6 +433,12 @@ class PlayerActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         webView?.onResume()
+        registerCast()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterCast()
     }
 
     private fun isInPictureInPictureModeCompat(): Boolean =
@@ -368,6 +461,21 @@ class PlayerActivity : ComponentActivity() {
         private const val NATIVE_HEALTH_TIMEOUT_MS = 12_000L
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+
+        /**
+         * Strip `sandbox` from every iframe — patches setAttribute before page
+         * scripts run (document-start) and observes for late additions — so the
+         * embed's nested player iframe isn't sandboxed and will actually play.
+         */
+        private const val UNSANDBOX_JS =
+            "(function(){function strip(n){try{if(n&&n.tagName==='IFRAME')n.removeAttribute('sandbox');" +
+                "if(n&&n.querySelectorAll)n.querySelectorAll('iframe[sandbox]').forEach(function(f){f.removeAttribute('sandbox');});}catch(e){}}" +
+                "try{var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){" +
+                "if(this.tagName==='IFRAME'&&String(n).toLowerCase()==='sandbox')return;return sa.call(this,n,v);};}catch(e){}" +
+                "try{new MutationObserver(function(ms){ms.forEach(function(m){if(m.type==='attributes')strip(m.target);" +
+                "(m.addedNodes||[]).forEach(strip);});}).observe(document.documentElement||document," +
+                "{childList:true,subtree:true,attributes:true,attributeFilter:['sandbox']});}catch(e){}" +
+                "try{strip(document);}catch(e){}})();"
 
         /** Unmute + start any <video> and click common play buttons. */
         private const val AUTOPLAY_JS =

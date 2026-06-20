@@ -82,6 +82,9 @@ dependencies {
   implementation(libs.androidx.media3.cast)
   implementation(libs.play.services.cast.framework)
 
+  // WebView: document-start scripting to un-sandbox embed player iframes
+  implementation(libs.androidx.webkit)
+
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
