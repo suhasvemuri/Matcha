@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Rational
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -25,6 +26,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -37,10 +40,14 @@ import com.google.android.gms.cast.framework.CastContext
  * Immersive stream player with Picture-in-Picture.
  *
  * Plays natively in ExoPlayer (Media3): direct streams play immediately; for
- * embed pages (streamed.st's embed.st) an offscreen WebView is loaded and its
- * dynamically-fetched HLS playlist (.m3u8) is intercepted and handed to
- * ExoPlayer — so the match plays in-app, not on the website. Falls back to
- * the WebView player only if no playlist can be extracted.
+ * embed pages (streamed.st's embed.st) an offscreen WebView is loaded, autoplay
+ * is nudged, and its dynamically-fetched HLS playlist (.m3u8) is intercepted and
+ * handed to ExoPlayer — so the match plays in-app, not on the website.
+ *
+ * Streamed playlists are often token/Referer-gated, so native playback can fail
+ * even after extraction. When that happens (or no playlist is found) we fall
+ * back to the already-loaded WebView and let its own player run in-app — popups
+ * and cross-origin ad redirects are blocked so it stays a clean player surface.
  */
 @OptIn(UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
@@ -49,11 +56,16 @@ class PlayerActivity : ComponentActivity() {
     private var playerView: PlayerView? = null
     private var webView: WebView? = null
     private var spinner: ProgressBar? = null
-    private var topBar: android.view.View? = null
+    private var topBar: View? = null
+    private var fullscreenContainer: FrameLayout? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private lateinit var root: FrameLayout
 
     private var nativePlaying = false
+    private var nativeHealthy = false
     private var extractionDone = false
+    private var webFallbackActive = false
+    private var embedHost: String? = null
     private val main = Handler(Looper.getMainLooper())
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -80,13 +92,14 @@ class PlayerActivity : ComponentActivity() {
         if (isDirectStream(url)) {
             if (isSafeMediaUrl(url)) playNative(url, emptyMap()) else finish()
         } else {
+            embedHost = runCatching { java.net.URI(url).host }.getOrNull()
             setupEmbedExtraction(url)
         }
     }
 
     /** Play an HLS/stream URL natively in ExoPlayer. */
     private fun playNative(url: String, headers: Map<String, String>) {
-        if (nativePlaying) return
+        if (nativePlaying || webFallbackActive) return
         nativePlaying = true
         spinner?.let { root.removeView(it) }
 
@@ -105,6 +118,17 @@ class PlayerActivity : ComponentActivity() {
             .build()
             .also { exoPlayer = it }
 
+        player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                // Token/Referer-gated segments or a dead manifest — drop to WebView.
+                fallbackToWebView()
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) nativeHealthy = true
+            }
+        })
+
         val view = PlayerView(this).apply {
             this.player = player
             layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
@@ -112,14 +136,14 @@ class PlayerActivity : ComponentActivity() {
             setShowPreviousButton(false)
         }
         playerView = view
-        root.addView(view)
+        root.addView(view, 0) // behind the top bar
 
         // Mute/hide the extraction WebView so there's no double audio.
         webView?.let { wv ->
             wv.evaluateJavascript(
                 "document.querySelectorAll('video').forEach(v=>{v.muted=true;v.pause();});", null,
             )
-            wv.visibility = android.view.View.GONE
+            wv.visibility = View.GONE
         }
 
         val media = if (url.contains(".m3u8")) {
@@ -130,6 +154,29 @@ class PlayerActivity : ComponentActivity() {
         if (media != null) player.setMediaSource(media) else player.setMediaItem(MediaItem.fromUri(url))
         player.playWhenReady = true
         player.prepare()
+
+        // Watchdog: if native never becomes healthy, fall back to the WebView.
+        main.postDelayed({ if (!nativeHealthy) fallbackToWebView() }, NATIVE_HEALTH_TIMEOUT_MS)
+    }
+
+    /** Native path failed or timed out — reveal the in-app WebView player. */
+    private fun fallbackToWebView() {
+        if (webFallbackActive) return
+        webFallbackActive = true
+        extractionDone = true
+
+        exoPlayer?.let { it.stop(); it.release() }
+        exoPlayer = null
+        playerView?.let { root.removeView(it) }
+        playerView = null
+        spinner?.let { root.removeView(it) }
+
+        val wv = webView
+        if (wv == null) { finish(); return }
+        wv.visibility = View.VISIBLE
+        // Un-mute and (re)start playback inside the page.
+        wv.evaluateJavascript(AUTOPLAY_JS, null)
+        topBar?.let { it.bringToFront() }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -142,8 +189,39 @@ class PlayerActivity : ComponentActivity() {
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
             settings.userAgentString = DESKTOP_UA
-            visibility = android.view.View.INVISIBLE // hidden until we decide
-            webChromeClient = WebChromeClient()
+            settings.setSupportMultipleWindows(false) // no ad popups
+            setBackgroundColor(0xFF000000.toInt())
+            visibility = View.INVISIBLE // hidden until we decide
+            webChromeClient = object : WebChromeClient() {
+                // Swallow window.open() / target=_blank ad popups.
+                override fun onCreateWindow(
+                    view: WebView?,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: android.os.Message?,
+                ): Boolean = false
+
+                // Support the embed's own HTML5 fullscreen button.
+                override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                    if (view == null) return
+                    customViewCallback = callback
+                    val container = FrameLayout(this@PlayerActivity).apply {
+                        setBackgroundColor(0xFF000000.toInt())
+                        layoutParams = FrameLayout.LayoutParams(MATCH, MATCH)
+                    }
+                    container.addView(view)
+                    fullscreenContainer = container
+                    root.addView(container)
+                    topBar?.bringToFront()
+                }
+
+                override fun onHideCustomView() {
+                    fullscreenContainer?.let { root.removeView(it) }
+                    fullscreenContainer = null
+                    customViewCallback?.onCustomViewHidden()
+                    customViewCallback = null
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView?,
@@ -159,19 +237,31 @@ class PlayerActivity : ComponentActivity() {
                     }
                     return super.shouldInterceptRequest(view, request)
                 }
+
+                // Keep navigation on the embed host; block cross-origin ad jumps.
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): Boolean {
+                    val host = request?.url?.host ?: return false
+                    val ok = embedHost == null || host.contains("embed.st") ||
+                        host.contains("streamed") || host == embedHost
+                    return !ok // true = block the navigation
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    // Nudge autoplay so the playlist is requested promptly.
+                    view?.evaluateJavascript(AUTOPLAY_JS, null)
+                }
             }
         }
         webView = web
         root.addView(web, 0) // behind the spinner
         web.loadUrl(embedUrl)
 
-        // Fallback: if no playlist is intercepted, show the WebView player.
+        // Fallback: if no playlist is intercepted in time, show the WebView player.
         main.postDelayed({
-            if (!nativePlaying) {
-                extractionDone = true
-                spinner?.let { root.removeView(it) }
-                web.visibility = android.view.View.VISIBLE
-            }
+            if (!nativePlaying && !webFallbackActive) fallbackToWebView()
         }, EXTRACT_TIMEOUT_MS)
     }
 
@@ -236,7 +326,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerView?.useController = !isInPictureInPictureMode
-        topBar?.visibility = if (isInPictureInPictureMode) android.view.View.GONE else android.view.View.VISIBLE
+        topBar?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
     }
 
     private fun hideSystemBars() {
@@ -274,9 +364,16 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
-        private const val EXTRACT_TIMEOUT_MS = 18_000L
+        private const val EXTRACT_TIMEOUT_MS = 9_000L
+        private const val NATIVE_HEALTH_TIMEOUT_MS = 12_000L
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+
+        /** Unmute + start any <video> and click common play buttons. */
+        private const val AUTOPLAY_JS =
+            "(function(){try{document.querySelectorAll('video').forEach(function(v){v.muted=false;var p=v.play();if(p&&p.catch)p.catch(function(){});});" +
+                "['.play-button','.vjs-big-play-button','.clappr-play-button','[class*=play]'].forEach(function(s){var e=document.querySelector(s);if(e)e.click();});}catch(e){}})();"
+
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
 

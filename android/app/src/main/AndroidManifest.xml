@@ -47,6 +47,14 @@
                 android:resource="@xml/matcha_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".notifications.NotificationDismissReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.matcha.NOTIFICATION_DISMISSED" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".notifications.LiveScoreService"
             android:exported="false"

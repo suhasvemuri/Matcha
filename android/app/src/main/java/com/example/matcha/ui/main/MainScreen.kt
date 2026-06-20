@@ -181,7 +181,12 @@ private fun ScoresContent(
         ),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 18.dp)) {
-            val twoPane = maxWidth >= 720.dp
+            // Two-pane when the window is wide (tablet / inner-screen landscape)
+            // OR when its smaller side is large — the Galaxy Fold inner screen in
+            // portrait (~670dp) clears this even though it's under 720dp wide, so
+            // list-detail shows side-by-side on the inner display in BOTH
+            // orientations. Regular phones (smaller side ~410dp) stay single-pane.
+            val twoPane = maxWidth >= 720.dp || minOf(maxWidth, maxHeight) >= 600.dp
 
             Column(Modifier.fillMaxSize()) {
                 ScoresHeader(
