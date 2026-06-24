@@ -633,6 +633,12 @@ struct MatchaDashboardView: View {
         compactMode ? 30 : 20
     }
 
+    /// Recent completed results are shown in their own collapsible section, so
+    /// they get an independent budget rather than competing with upcoming games.
+    private var maxRecentResults: Int {
+        15
+    }
+
     private var shouldUseCompactInlineList: Bool {
         approximateVisibleRowCount <= 3 && !showRecentResults
     }
@@ -854,30 +860,26 @@ struct MatchaDashboardView: View {
         upcoming.sort { $0.sortDate < $1.sortDate }
         completedRecent.sort { $0.sortDate > $1.sortDate }
 
-        let visible: [UnifiedMatch]
+        // Budget live + upcoming and recent-completed SEPARATELY. Previously
+        // completed games were appended after upcoming and then truncated by the
+        // shared cap, so a busy slate (e.g. a World Cup matchday with many
+        // upcoming fixtures) pushed every recent result off the list.
+        let visiblePrimary: [UnifiedMatch]
+        let visibleRecent: [UnifiedMatch]
         if visibilityFilter == .live {
-            visible = Array(live.prefix(maxDisplayedMatches))
+            visiblePrimary = Array(live.prefix(maxDisplayedMatches))
+            visibleRecent = []
         } else {
-            visible = Array((live + upcoming + completedRecent).prefix(maxDisplayedMatches))
+            visiblePrimary = Array((live + upcoming).prefix(maxDisplayedMatches))
+            visibleRecent = Array(completedRecent.prefix(maxRecentResults))
         }
 
-        var primary: [UnifiedMatch] = []
-        var recentCompleted: [UnifiedMatch] = []
-        var liveCount = 0
-
-        for match in visible {
-            if match.isLive { liveCount += 1 }
-            if matchIsCompleted(match) {
-                recentCompleted.append(match)
-            } else {
-                primary.append(match)
-            }
-        }
+        let liveCount = visiblePrimary.filter { $0.isLive }.count
 
         return MatchDisplaySnapshot(
-            visible: visible,
-            primary: primary,
-            recentCompleted: recentCompleted,
+            visible: visiblePrimary + visibleRecent,
+            primary: visiblePrimary,
+            recentCompleted: visibleRecent,
             liveCount: liveCount
         )
     }

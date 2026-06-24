@@ -36,6 +36,7 @@ struct SoccerMenu: View {
     @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
     @State private var standingsTitle = ""
     @State private var standingsRows: [SoccerStandingRow] = []
+    @State private var standingsGroups: [SoccerStandingGroup] = []
 
     private var refreshInterval: TimeInterval {
         switch selectedOption {
@@ -99,7 +100,30 @@ struct SoccerMenu: View {
 
     var body: some View {
         Menu(title) {
-            if !standingsRows.isEmpty {
+            if !standingsGroups.isEmpty {
+                Menu("Standings") {
+                    ForEach(standingsGroups) { group in
+                        Menu(group.name) {
+                            ForEach(group.rows) { row in
+                                Text("\(row.rank). \(row.teamName)  \(row.points) pts  GP \(row.played)  (\(row.record))")
+                            }
+                        }
+                    }
+
+                    if let standingsURL = LeagueLinks.standingsURL(for: league) {
+                        Divider()
+                        Button("Open Full Standings") {
+                            NSWorkspace.shared.open(standingsURL)
+                        }
+                    }
+                }
+                if let bracketURL = LeagueLinks.bracketURL(for: league) {
+                    Button("View Knockout Bracket") {
+                        NSWorkspace.shared.open(bracketURL)
+                    }
+                }
+                Divider().padding(.bottom, 2)
+            } else if !standingsRows.isEmpty {
                 Menu("Standings: \(standingsTitle)") {
                     ForEach(standingsRows) { row in
                         Text("\(row.rank). \(row.teamName)  \(row.points) pts  GP \(row.played)  (\(row.record))")
@@ -335,6 +359,14 @@ struct SoccerMenu: View {
     }
 
     private func refreshStandingsIfNeeded(force: Bool = false) async {
+        if LeagueLinks.isGroupStageLeague(league) {
+            if !force, !standingsGroups.isEmpty { return }
+            if let groups = await SoccerStandingsService.shared.groupStandings(for: league) {
+                standingsGroups = groups
+            }
+            return
+        }
+
         if !force, !standingsRows.isEmpty { return }
         if let result = await SoccerStandingsService.shared.topStandings(for: league, maxRows: 5) {
             standingsTitle = result.title
