@@ -2559,14 +2559,14 @@ private struct SoccerMatchCard: View {
             }
             HStack(spacing: 6) {
                 if alignment == .leading {
-                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
                 }
                 Text(team?.abbreviation ?? team?.displayName ?? "Team")
                     .font(.system(size: 11.8, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.88))
                     .lineLimit(1)
                 if alignment == .trailing {
-                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
                 }
             }
         }
@@ -2689,7 +2689,7 @@ private struct SoccerTeamLine: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
             Text(team?.abbreviation ?? team?.displayName ?? "Team")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
@@ -2701,11 +2701,31 @@ private struct SoccerTeamLine: View {
 private struct TeamLogo: View {
     let urlString: String?
     let fallback: String
+    var teamName: String? = nil
     @State private var resolvedURL: URL?
+
+    /// National teams get a crisp flag (matching the cricket badge style);
+    /// clubs fall through to their crest logo.
+    private var flagURL: URL? { CountryFlags.flagURL(for: teamName) }
 
     var body: some View {
         Group {
-            if let resolvedURL, resolvedURL.isFileURL, let localImage = MatchaImageCache.image(for: resolvedURL) {
+            if let flagURL {
+                AsyncImage(url: flagURL) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFit()
+                    default:
+                        fallbackBadge
+                    }
+                }
+                .frame(width: 19, height: 19)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(.white.opacity(0.30), lineWidth: 0.6)
+                )
+            } else if let resolvedURL, resolvedURL.isFileURL, let localImage = MatchaImageCache.image(for: resolvedURL) {
                 Image(nsImage: localImage)
                     .resizable()
                     .scaledToFit()
@@ -4163,7 +4183,7 @@ private struct SoccerInlineDetailPane: View {
     @ViewBuilder
     private func soccerTeamRow(team: Team?, score: String?) -> some View {
         HStack(spacing: 8) {
-            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
             Text(team?.displayName ?? team?.name ?? "Team")
                 .font(.caption)
                 .frame(maxWidth: .infinity, alignment: .leading)

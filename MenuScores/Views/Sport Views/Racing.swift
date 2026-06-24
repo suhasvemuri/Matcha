@@ -148,7 +148,7 @@ struct RacingMenu: View {
                             AsyncImage(
                                 url: URL(
                                     string:
-                                    "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-nascar.png&h=80&w=80&scale=crop&cquality=40"
+                                    "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-nascar.png&h=160&w=160&scale=crop&cquality=100"
                                 )
                             ) { image in
                                 image.resizable().scaledToFit()

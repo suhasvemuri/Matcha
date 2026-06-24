@@ -12,6 +12,7 @@ struct CricketMenu: View {
     @AppStorage("refreshInterval") private var selectedOption = "15 seconds"
     @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
     @AppStorage("favoriteCricketCsv") private var favoriteCricketCsv = ""
+    @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
 
     @State private var pinnedByMenubar = false
 
@@ -30,17 +31,28 @@ struct CricketMenu: View {
         }
     }
 
-    private var teamFilters: [String] {
-        (favoriteCricketCsv + "," + legacyFavoriteTeamsCsv)
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
+    /// Favorite cricket teams plus favorited competitions (e.g. IPL, ICC World
+    /// Cup) from the real selections store, with legacy CSV fallback. A cricket
+    /// match matches if any term appears in its series/team/description text.
+    private var filterTerms: [String] {
+        let teams = FavoriteSelectionsStore.teamTerms(
+            json: favoriteSelectionsJSON,
+            sport: .cricket,
+            legacySoccerCsv: "",
+            legacyCricketCsv: favoriteCricketCsv,
+            legacyCombinedCsv: legacyFavoriteTeamsCsv
+        )
+        let competitions = FavoriteSelectionsStore.competitionTerms(
+            json: favoriteSelectionsJSON,
+            legacyCsv: ""
+        )
+        return Array(Set(teams + competitions))
     }
 
     private var filteredMatches: [CricketMatch] {
-        guard !teamFilters.isEmpty else { return viewModel.matches }
+        guard !filterTerms.isEmpty else { return viewModel.matches }
 
-        return viewModel.matches.filter { match in
+        let matched = viewModel.matches.filter { match in
             let haystack = [
                 match.title,
                 match.detail,
@@ -50,8 +62,12 @@ struct CricketMenu: View {
                 match.matchDesc,
             ].joined(separator: " ").lowercased()
 
-            return teamFilters.contains { haystack.contains($0) }
+            return filterTerms.contains { haystack.contains($0) }
         }
+
+        // Show your favorites when they're playing; if none of them appear today,
+        // fall back to the full list rather than an empty menu.
+        return matched.isEmpty ? viewModel.matches : matched
     }
 
     var body: some View {
@@ -60,8 +76,7 @@ struct CricketMenu: View {
                 FeedPlaceholder(
                     noun: "cricket matches",
                     isLoading: viewModel.isInitialLoading,
-                    loadFailed: viewModel.loadFailed,
-                    filteredOutByFavorites: !teamFilters.isEmpty && !viewModel.matches.isEmpty
+                    loadFailed: viewModel.loadFailed
                 )
 
                 Button("Open Cricbuzz Live Scores") {

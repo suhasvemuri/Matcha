@@ -127,7 +127,7 @@ struct LacrosseMenu: View {
                                 } label: {
                                     HStack {
                                         AsyncImage(
-                                            url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-lacrosse.png&h=80&w=80&scale=crop&cquality=40")
+                                            url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-lacrosse.png&h=160&w=160&scale=crop&cquality=100")
                                         ) { image in
                                             image.resizable().scaledToFit()
                                         } placeholder: {

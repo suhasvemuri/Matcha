@@ -109,9 +109,11 @@ struct StreamingSettingsView: View {
                 .font(.title2)
                 .bold()
 
-            Text("Search, favorite, and connect watch sources from one place.")
+            Text("Enable leagues in Sports & Data, then add teams below to filter a league to just those teams — e.g. follow the World Cup but show only your countries. Add national teams (Brazil, USA…) under Teams.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             Form {
                 Section("IPTV") {

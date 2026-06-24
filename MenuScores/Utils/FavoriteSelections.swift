@@ -249,6 +249,36 @@ enum FavoriteCatalogProvider {
         .init(kind: .competition, sport: .cricket, name: "The Hundred", country: "England"),
     ]
 
+    /// National teams (World Cup family). Club standings don't include these, so
+    /// list them explicitly — this is what lets a user follow the World Cup but
+    /// filter it to selected countries. Names match CountryFlags so flags render.
+    static let soccerNationalTeams: [FavoriteCatalogItem] = [
+        // UEFA
+        n("England"), n("Spain"), n("France"), n("Germany"), n("Italy"),
+        n("Portugal"), n("Netherlands"), n("Belgium"), n("Croatia"), n("Serbia"),
+        n("Switzerland"), n("Denmark"), n("Poland"), n("Austria"), n("Ukraine"),
+        n("Sweden"), n("Norway"), n("Turkey"), n("Scotland"), n("Wales"),
+        // CONMEBOL
+        n("Brazil"), n("Argentina"), n("Uruguay"), n("Colombia"), n("Chile"),
+        n("Peru"), n("Ecuador"), n("Paraguay"), n("Bolivia"), n("Venezuela"),
+        // CONCACAF
+        n("United States"), n("Mexico"), n("Canada"), n("Costa Rica"), n("Panama"),
+        n("Jamaica"), n("Honduras"),
+        // CAF
+        n("Morocco"), n("Senegal"), n("Ivory Coast"), n("Nigeria"), n("Ghana"),
+        n("Cameroon"), n("Egypt"), n("Algeria"), n("Tunisia"), n("South Africa"),
+        n("Mali"), n("Cape Verde"),
+        // AFC
+        n("Japan"), n("South Korea"), n("Iran"), n("Saudi Arabia"), n("Australia"),
+        n("Qatar"), n("Iraq"), n("Uzbekistan"), n("Jordan"),
+        // OFC
+        n("New Zealand"),
+    ]
+
+    private static func n(_ name: String) -> FavoriteCatalogItem {
+        .init(kind: .team, sport: .soccer, name: name, country: "International")
+    }
+
     static let quickStartPicks: [FavoriteCatalogItem] = [
         .init(kind: .competition, sport: .cricket, name: "IPL", country: "India"),
         .init(kind: .competition, sport: .cricket, name: "ICC T20 World Cup", country: "International"),
@@ -261,7 +291,7 @@ enum FavoriteCatalogProvider {
     ]
 
     static func allStaticItems() -> [FavoriteCatalogItem] {
-        dedupe(soccerCompetitions + cricketTeams + cricketCompetitions)
+        dedupe(soccerCompetitions + soccerNationalTeams + cricketTeams + cricketCompetitions)
     }
 
     static func loadSoccerTeamCatalog() async -> [FavoriteCatalogItem] {

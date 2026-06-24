@@ -25,7 +25,7 @@ struct CompactTrailing: View {
                             if sport == "volleyball" {
                                 return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
                             } else {
-                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
+                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=160&w=160&scale=crop&cquality=100"
                             }
                         }())
                     ) { image in

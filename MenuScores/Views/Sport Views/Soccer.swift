@@ -33,6 +33,7 @@ struct SoccerMenu: View {
     @AppStorage("iptvM3UURL") private var iptvM3UURL = ""
     @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
     @AppStorage("favoriteSoccerCsv") private var favoriteSoccerCsv = ""
+    @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
     @State private var standingsTitle = ""
     @State private var standingsRows: [SoccerStandingRow] = []
 
@@ -51,28 +52,22 @@ struct SoccerMenu: View {
         }
     }
 
+    /// Favorite team names for soccer, read from the real selections store
+    /// (with legacy CSVs as fallback). These drive per-league filtering.
     private var teamFilters: [String] {
-        (favoriteSoccerCsv + "," + legacyFavoriteTeamsCsv)
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
-    }
-
-    /// National-team tournaments (World Cup family) are contested by countries,
-    /// not clubs — so a club-team favorites filter (e.g. Liverpool) would hide
-    /// the entire competition. Always show these leagues in full; favoriting a
-    /// club shouldn't suppress the World Cup.
-    private var ignoresTeamFavorites: Bool {
-        [
-            "FFWC", "FFWWC", "FFWCQUEFA",
-            "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC",
-        ].contains(league.uppercased())
+        FavoriteSelectionsStore.teamTerms(
+            json: favoriteSelectionsJSON,
+            sport: .soccer,
+            legacySoccerCsv: favoriteSoccerCsv,
+            legacyCricketCsv: "",
+            legacyCombinedCsv: legacyFavoriteTeamsCsv
+        )
     }
 
     private var filteredGames: [Event] {
-        guard !teamFilters.isEmpty, !ignoresTeamFavorites else { return viewModel.games }
+        guard !teamFilters.isEmpty else { return viewModel.games }
 
-        return viewModel.games.filter { game in
+        let matched = viewModel.games.filter { game in
             let names = game.competitions
                 .first?
                 .competitors?
@@ -82,6 +77,12 @@ struct SoccerMenu: View {
                 names.contains { $0.contains(filter) }
             }
         }
+
+        // Apple Sports-style: narrow a league to your favorite teams when they
+        // actually play in it; if none of your favorites appear here (e.g. club
+        // favorites for a national-team tournament like the World Cup), show the
+        // league in full rather than hiding the whole competition.
+        return matched.isEmpty ? viewModel.games : matched
     }
 
     private func broadcastNames(for game: Event) -> [String] {
@@ -273,7 +274,7 @@ struct SoccerMenu: View {
                     } label: {
                         HStack {
                             AsyncImage(
-                                url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=80&w=80&scale=crop&cquality=40")
+                                url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=160&w=160&scale=crop&cquality=100")
                             ) { image in
                                 image.resizable().scaledToFit()
                             } placeholder: {
@@ -289,8 +290,7 @@ struct SoccerMenu: View {
                 FeedPlaceholder(
                     noun: "soccer games",
                     isLoading: viewModel.isInitialLoading,
-                    loadFailed: viewModel.loadFailed,
-                    filteredOutByFavorites: !ignoresTeamFavorites && !teamFilters.isEmpty && !viewModel.games.isEmpty
+                    loadFailed: viewModel.loadFailed
                 )
             }
         }
