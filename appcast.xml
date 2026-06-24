@@ -3,14 +3,14 @@
     <channel>
         <title>Matcha</title>
         <item>
-            <title>1.0</title>
-            <pubDate>Wed, 24 Jun 2026 10:29:07 +0530</pubDate>
-            <sparkle:version>2</sparkle:version>
-            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <title>1.0.1</title>
+            <pubDate>Wed, 24 Jun 2026 13:46:31 +0530</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://raw.githubusercontent.com/suhasvemuri/Matcha/main/Matcha-1.0.html</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/suhasvemuri/Matcha/releases/download/v1.0/Matcha-1.0.dmg" length="9527204" type="application/octet-stream" sparkle:edSignature="xzmrRPSZR2w8IgCxGQpkZ0QTLPOvIQYUBQICOM1KhaxGUsYw0raEnUgalhOxtAVW8uq8+iv1CW9Vua+jlNdjAg=="/>
+            <sparkle:releaseNotesLink>https://raw.githubusercontent.com/suhasvemuri/Matcha/main/Matcha-1.0.1.html</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/suhasvemuri/Matcha/releases/download/v1.0.1/Matcha-1.0.1.dmg" length="9517994" type="application/octet-stream" sparkle:edSignature="c9Z1gxupw52TAvbJgkiM4wGOl7oQ5zXddoQGunQVuGpJxwpSdZR3cgFaRqK6Ezcg1n6/GrM8zybOcWzzypHNBw=="/>
         </item>
     </channel>
 </rss>
