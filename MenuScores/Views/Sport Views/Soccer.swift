@@ -58,8 +58,19 @@ struct SoccerMenu: View {
             .filter { !$0.isEmpty }
     }
 
+    /// National-team tournaments (World Cup family) are contested by countries,
+    /// not clubs — so a club-team favorites filter (e.g. Liverpool) would hide
+    /// the entire competition. Always show these leagues in full; favoriting a
+    /// club shouldn't suppress the World Cup.
+    private var ignoresTeamFavorites: Bool {
+        [
+            "FFWC", "FFWWC", "FFWCQUEFA",
+            "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC",
+        ].contains(league.uppercased())
+    }
+
     private var filteredGames: [Event] {
-        guard !teamFilters.isEmpty else { return viewModel.games }
+        guard !teamFilters.isEmpty, !ignoresTeamFavorites else { return viewModel.games }
 
         return viewModel.games.filter { game in
             let names = game.competitions
@@ -279,7 +290,7 @@ struct SoccerMenu: View {
                     noun: "soccer games",
                     isLoading: viewModel.isInitialLoading,
                     loadFailed: viewModel.loadFailed,
-                    filteredOutByFavorites: !teamFilters.isEmpty && !viewModel.games.isEmpty
+                    filteredOutByFavorites: !ignoresTeamFavorites && !teamFilters.isEmpty && !viewModel.games.isEmpty
                 )
             }
         }
