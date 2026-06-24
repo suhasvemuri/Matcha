@@ -57,8 +57,12 @@ struct CricketMenu: View {
     var body: some View {
         Menu(title) {
             if filteredMatches.isEmpty {
-                Text("No cricket matches for current filters")
-                    .foregroundColor(.secondary)
+                FeedPlaceholder(
+                    noun: "cricket matches",
+                    isLoading: viewModel.isInitialLoading,
+                    loadFailed: viewModel.loadFailed,
+                    filteredOutByFavorites: !teamFilters.isEmpty && !viewModel.matches.isEmpty
+                )
 
                 Button("Open Cricbuzz Live Scores") {
                     if let url = URL(string: "https://www.cricbuzz.com/cricket-match/live-scores") {

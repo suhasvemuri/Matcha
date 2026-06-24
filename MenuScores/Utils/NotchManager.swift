@@ -9,6 +9,7 @@ import DynamicNotchKit
 import KeyboardShortcuts
 import SwiftUI
 
+@MainActor
 class NotchViewModel: ObservableObject {
     @AppStorage("notchScreenIndex") private var notchScreenIndex = 0
 

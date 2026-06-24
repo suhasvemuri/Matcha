@@ -217,13 +217,18 @@ struct CricketMatch: Identifiable, Equatable {
 @MainActor
 final class CricketListView: ObservableObject {
     @Published var matches: [CricketMatch] = []
+    @Published var isInitialLoading = true
+    @Published var loadFailed = false
 
     func populateMatches() async {
         do {
             self.matches = try await CricketFeed.fetchMatches()
+            self.loadFailed = false
         } catch {
-            print("Failed to fetch cricket matches:", error)
+            Log.feed.error("Failed to fetch cricket matches: \(error.localizedDescription, privacy: .public)")
+            self.loadFailed = matches.isEmpty
         }
+        self.isInitialLoading = false
     }
 }
 
@@ -235,10 +240,11 @@ enum CricketFeed {
     static func fetchMatches() async throws -> [CricketMatch] {
         var request = URLRequest(url: liveScoresURL)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
             throw NetworkError.invalidResponse
         }
 
@@ -328,10 +334,11 @@ enum CricketFeed {
 
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
                 return nil
             }
             guard let html = String(data: data, encoding: .utf8) else {
@@ -350,10 +357,11 @@ enum CricketFeed {
 
         var request = URLRequest(url: url)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
                 return nil
             }
             guard let html = String(data: data, encoding: .utf8) else {
@@ -368,10 +376,11 @@ enum CricketFeed {
     static func fetchStandings(from pointsTableURL: URL) async -> CricketStandingsTable? {
         var request = URLRequest(url: pointsTableURL)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
                 return nil
             }
             guard let html = String(data: data, encoding: .utf8) else {

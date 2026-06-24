@@ -73,7 +73,7 @@ func displayText(for game: Event, league: String) -> String {
 
     // Other Racing Game States
 
-    let leaderName = game.competitions[0].competitors?.first(where: { $0.order == 1 })?.athlete?.displayName ?? "-"
+    let leaderName = game.competitions.first?.competitors?.first(where: { $0.order == 1 })?.athlete?.displayName ?? "-"
 
     if league == "NC" || league == "NCS" || league == "NCT" || league == "IRL", state == "in" {
         return "\(leaderName) - \(periodText)"
@@ -86,9 +86,9 @@ func displayText(for game: Event, league: String) -> String {
     // PGA Game States
 
     let golferName =
-        game.competitions[0].competitors?.first(where: { $0.order == 1 })?.athlete?.displayName ?? "-"
-    let golferScore = game.competitions[0].competitors?.first?.score ?? "-"
-    let golfRound = game.competitions[0].status.period
+        game.competitions.first?.competitors?.first(where: { $0.order == 1 })?.athlete?.displayName ?? "-"
+    let golferScore = game.competitions.first?.competitors?.first?.score ?? "-"
+    let golfRound = game.competitions.first?.status.period
     let golfRoundText = golfRound.map { "\(prefix)\($0)" } ?? "-"
 
     if league == "PGA" || league == "LPGA", state == "in" {

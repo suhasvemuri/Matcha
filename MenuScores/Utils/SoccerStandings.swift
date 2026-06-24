@@ -28,8 +28,10 @@ actor SoccerStandingsService {
         guard let url = LeagueLinks.standingsAPIURL(for: league) else { return nil }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NetworkError.invalidResponse
             }
 
@@ -63,7 +65,7 @@ actor SoccerStandingsService {
 
             return (item.title, Array(item.rows.prefix(maxRows)))
         } catch {
-            print("Failed to fetch standings:", error)
+            Log.feed.error("Failed to fetch standings: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

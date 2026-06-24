@@ -16,16 +16,16 @@ struct CompactTrailing: View {
         if let game = notchViewModel.game {
             if sport != "F1" && sport != "Racing" && sport != "Golf" {
                 HStack {
-                    Text("\(game.competitions[0].competitors?[0].score ?? "-")")
+                    Text("\(game.competitions.first?.competitors?[safe: 0]?.score ?? "-")")
                         .contentTransition(.numericText(countsDown: false))
                         .font(.system(size: 14, weight: .semibold))
 
                     AsyncImage(
                         url: URL(string: {
                             if sport == "volleyball" {
-                                return game.competitions[0].competitors?[0].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
+                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
                             } else {
-                                return game.competitions[0].competitors?[0].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
+                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
                             }
                         }())
                     ) { image in
@@ -107,7 +107,7 @@ struct CompactTrailing: View {
 
             if sport == "Racing" {
                 HStack {
-                    if let lap = game.competitions[0].status.period {
+                    if let lap = game.competitions.first?.status.period {
                         Text("L\(lap)")
                             .contentTransition(.numericText(countsDown: false))
                             .font(.system(size: 14, weight: .semibold))
@@ -146,7 +146,7 @@ struct CompactTrailing: View {
 
             if sport == "Golf" {
                 HStack {
-                    if let round = game.competitions[0].status.period {
+                    if let round = game.competitions.first?.status.period {
                         Text("R\(round)")
                             .contentTransition(.numericText(countsDown: false))
                             .font(.system(size: 14, weight: .semibold))

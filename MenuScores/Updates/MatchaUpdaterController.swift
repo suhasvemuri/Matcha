@@ -10,6 +10,7 @@ final class MatchaUpdaterController: ObservableObject {
     @Published private(set) var feedURL: URL?
 
     let standardUpdaterController: SPUStandardUpdaterController
+    private var didBecomeActiveObserver: NSObjectProtocol?
 
     init() {
         standardUpdaterController = SPUStandardUpdaterController(
@@ -20,7 +21,7 @@ final class MatchaUpdaterController: ObservableObject {
 
         syncState()
 
-        NotificationCenter.default.addObserver(
+        didBecomeActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
@@ -28,6 +29,12 @@ final class MatchaUpdaterController: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.syncState()
             }
+        }
+    }
+
+    deinit {
+        if let token = didBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(token)
         }
     }
 

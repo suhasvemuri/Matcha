@@ -12,3 +12,5 @@ xcuserdata/
 # Swift Package Manager
 .swiftpm/
 .build/
+
+.claude/

@@ -178,9 +178,7 @@ struct F1Menu: View {
                     }
                 }
             } else {
-                Text("Loading games...")
-                    .foregroundColor(.gray)
-                    .padding()
+                FeedPlaceholder(noun: "races", isLoading: viewModel.isInitialLoading, loadFailed: viewModel.loadFailed)
             }
         }
         .onAppear {

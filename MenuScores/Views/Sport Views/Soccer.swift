@@ -262,7 +262,7 @@ struct SoccerMenu: View {
                     } label: {
                         HStack {
                             AsyncImage(
-                                url: URL(string: game.competitions[0].competitors?[1].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=80&w=80&scale=crop&cquality=40")
+                                url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=80&w=80&scale=crop&cquality=40")
                             ) { image in
                                 image.resizable().scaledToFit()
                             } placeholder: {
@@ -275,9 +275,12 @@ struct SoccerMenu: View {
                     }
                 }
             } else {
-                Text(teamFilters.isEmpty ? "Loading games..." : "No soccer games match favorites")
-                    .foregroundColor(.gray)
-                    .padding()
+                FeedPlaceholder(
+                    noun: "soccer games",
+                    isLoading: viewModel.isInitialLoading,
+                    loadFailed: viewModel.loadFailed,
+                    filteredOutByFavorites: !teamFilters.isEmpty && !viewModel.games.isEmpty
+                )
             }
         }
         .onAppear {

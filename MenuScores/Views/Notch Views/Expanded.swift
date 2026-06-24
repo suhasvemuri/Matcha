@@ -97,11 +97,13 @@ struct Info: View {
         guard let url = URL(string: urlString) else { return }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, _) = try await URLSession.shared.data(for: request)
             let decoder = JSONDecoder()
             let response = try decoder.decode(RaceInfoResponse.self, from: data)
 
-            if let race = response.sports.first?.leagues.first?.events[4] {
+            if let race = response.sports.first?.leagues.first?.events[safe: 4] {
                 DispatchQueue.main.async {
                     driverArray = race.competitors
                     totalLaps = race.laps
@@ -115,8 +117,7 @@ struct Info: View {
             }
 
         } catch {
-            print("Failed to fetch race info: \(error)")
-            DispatchQueue.main.async {}
+            Log.feed.error("Failed to fetch race info: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -148,9 +149,9 @@ struct Info: View {
                                     AsyncImage(
                                         url: URL(string: {
                                             if sport == "volleyball" {
-                                                return game.competitions[0].competitors?[1].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
+                                                return game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
                                             } else {
-                                                return game.competitions[0].competitors?[1].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
+                                                return game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
                                             }
                                         }())
                                     ) { image in
@@ -165,11 +166,11 @@ struct Info: View {
                                     .padding(.trailing, 7)
 
                                     VStack {
-                                        Text("\(game.competitions[0].competitors?[1].score ?? "-")")
+                                        Text("\(game.competitions.first?.competitors?[safe: 1]?.score ?? "-")")
                                             .contentTransition(.numericText(countsDown: false))
                                             .font(.system(size: 22, weight: .medium))
 
-                                        Text("\(game.competitions[0].competitors?[1].team?.abbreviation ?? "-")")
+                                        Text("\(game.competitions.first?.competitors?[safe: 1]?.team?.abbreviation ?? "-")")
                                             .font(.system(size: 12, weight: .medium))
                                     }
                                 }
@@ -214,20 +215,20 @@ struct Info: View {
                             VStack {
                                 HStack {
                                     VStack {
-                                        Text("\(game.competitions[0].competitors?[0].score ?? "-")")
+                                        Text("\(game.competitions.first?.competitors?[safe: 0]?.score ?? "-")")
                                             .contentTransition(.numericText(countsDown: false))
                                             .font(.system(size: 22, weight: .medium))
 
-                                        Text("\(game.competitions[0].competitors?[0].team?.abbreviation ?? "-")")
+                                        Text("\(game.competitions.first?.competitors?[safe: 0]?.team?.abbreviation ?? "-")")
                                             .font(.system(size: 12, weight: .medium))
                                     }
 
                                     AsyncImage(
                                         url: URL(string: {
                                             if sport == "Volleyball" {
-                                                return game.competitions[0].competitors?[0].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
+                                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin"
                                             } else {
-                                                return game.competitions[0].competitors?[0].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
+                                                return game.competitions.first?.competitors?[safe: 0]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-\(sport.lowercased()).png&h=80&w=80&scale=crop&cquality=40"
                                             }
                                         }())
                                     ) { image in
@@ -245,7 +246,7 @@ struct Info: View {
                         }
                     }
 
-                    if sport != "Lacrosse" && sport != "Volleyball" && sport != "Soccer" && game.competitions[0].status.type.state == "in" {
+                    if sport != "Lacrosse" && sport != "Volleyball" && sport != "Soccer" && game.competitions.first?.status.type.state == "in" {
                         VStack(alignment: .center) {
                             if let text = game.competitions.first?.situation?.lastPlay?.text {
                                 GeometryReader { geo in
@@ -272,7 +273,7 @@ struct Info: View {
                                                     .onAppear {
                                                         playText = text
                                                     }
-                                                    .onChange(of: text) { newText in
+                                                    .onChange(of: text) { _, newText in
                                                         playText = newText
                                                     }
                                             }
@@ -321,7 +322,7 @@ struct Info: View {
 
                     VStack(alignment: .center) {
                         if sport != "Lacrosse" && sport != "Volleyball" &&
-                            (game.competitions[0].status.type.state == "pre" || game.competitions[0].status.type.state == "post"),
+                            (game.competitions.first?.status.type.state == "pre" || game.competitions.first?.status.type.state == "post"),
                             let headline = game.competitions.first?.headlines?.first?.shortLinkText ?? game.competitions.first?.notes?.first?.headline ?? game.competitions.first?.highlights?.first?.headline
                         {
                             GeometryReader { geo in
@@ -347,7 +348,7 @@ struct Info: View {
                                                 .onAppear {
                                                     headlineText = headline
                                                 }
-                                                .onChange(of: headline) { newText in
+                                                .onChange(of: headline) { _, newText in
                                                     headlineText = newText
                                                 }
                                         }
@@ -361,18 +362,18 @@ struct Info: View {
                             .padding(.top, 10)
                         }
 
-                        if game.competitions[0].status.type.state == "pre" {
+                        if game.competitions.first?.status.type.state == "pre" {
                             HStack(spacing: 6) {
                                 Image(systemName: "location.fill")
                                     .font(.system(size: 12))
                                     .foregroundColor(.gray)
 
                                 if let weather = game.weather {
-                                    Text("\(game.competitions[0].venue?.address?.city ?? "-"), \(game.competitions[0].venue?.address?.state ?? "-")   \(weather.temperature ?? 0)°")
+                                    Text("\(game.competitions.first?.venue?.address?.city ?? "-"), \(game.competitions.first?.venue?.address?.state ?? "-")   \(weather.temperature ?? 0)°")
                                         .font(.system(size: 14, weight: .medium))
                                         .fixedSize()
                                 } else {
-                                    Text("\(game.competitions[0].venue?.fullName ?? "-")")
+                                    Text("\(game.competitions.first?.venue?.fullName ?? "-")")
                                         .font(.system(size: 14, weight: .medium))
                                         .fixedSize()
                                 }
@@ -669,7 +670,7 @@ struct Info: View {
                 VStack {
                     HStack(spacing: 4) {
                         VStack {
-                            if game.competitions[0].status.type.state == "in" || game.competitions[0].status.type.state == "post" {
+                            if game.competitions.first?.status.type.state == "in" || game.competitions.first?.status.type.state == "post" {
                                 HStack {
                                     AsyncImage(
                                         url: URL(
@@ -694,7 +695,7 @@ struct Info: View {
                                     Spacer()
 
                                     if game.status.type.state == "in" {
-                                        if let lap = game.competitions[0].status.period {
+                                        if let lap = game.competitions.first?.status.period {
                                             Text("L\(lap)")
                                                 .contentTransition(.numericText(countsDown: false))
                                                 .font(.system(size: 14, weight: .semibold))
@@ -709,7 +710,7 @@ struct Info: View {
                                                 .font(.system(size: 10))
 
                                             Text(
-                                                "\(game.competitions[0].competitors?.first(where: { $0.order == 1 })?.athlete?.shortName ?? "-")"
+                                                "\(game.competitions.first?.competitors?.first(where: { $0.order == 1 })?.athlete?.shortName ?? "-")"
                                             )
                                             .font(.system(size: 14, weight: .semibold))
                                             .padding(.trailing, 10)
@@ -731,7 +732,7 @@ struct Info: View {
 
                                     ScrollView(.vertical, showsIndicators: true) {
                                         VStack(spacing: 4) {
-                                            let competitors = game.competitions[0].competitors ?? []
+                                            let competitors = game.competitions.first?.competitors ?? []
 
                                             ForEach(competitors.filter { $0.order != nil }, id: \.id) { competitor in
                                                 HStack {
@@ -770,7 +771,7 @@ struct Info: View {
                                 .padding(.bottom, 5)
                             }
 
-                            if game.competitions[0].status.type.state == "pre" {
+                            if game.competitions.first?.status.type.state == "pre" {
                                 HStack {
                                     AsyncImage(
                                         url: URL(
@@ -841,7 +842,7 @@ struct Info: View {
                 VStack {
                     HStack(spacing: 4) {
                         VStack {
-                            if game.competitions[0].status.type.state == "in" || game.competitions[0].status.type.state == "post" {
+                            if game.competitions.first?.status.type.state == "in" || game.competitions.first?.status.type.state == "post" {
                                 HStack {
                                     AsyncImage(
                                         url: URL(
@@ -866,7 +867,7 @@ struct Info: View {
                                     Spacer()
 
                                     if game.status.type.state == "in" {
-                                        if let round = game.competitions[0].status.period {
+                                        if let round = game.competitions.first?.status.period {
                                             Text("R\(round)")
                                                 .contentTransition(.numericText(countsDown: false))
                                                 .font(.system(size: 14, weight: .semibold))
@@ -881,7 +882,7 @@ struct Info: View {
                                                 .font(.system(size: 10))
 
                                             Text(
-                                                "\(game.competitions[0].competitors?.first(where: { $0.order == 1 })?.athlete?.shortName ?? "-")"
+                                                "\(game.competitions.first?.competitors?.first(where: { $0.order == 1 })?.athlete?.shortName ?? "-")"
                                             )
                                             .font(.system(size: 14, weight: .semibold))
                                             .padding(.trailing, 10)
@@ -908,7 +909,7 @@ struct Info: View {
 
                                     ScrollView(.vertical, showsIndicators: true) {
                                         VStack(spacing: 4) {
-                                            let competitors = game.competitions[0].competitors ?? []
+                                            let competitors = game.competitions.first?.competitors ?? []
 
                                             ForEach(competitors.filter { $0.order != nil }.prefix(20), id: \.id) { competitor in
                                                 HStack {
@@ -952,7 +953,7 @@ struct Info: View {
                                 .padding(.bottom, 5)
                             }
 
-                            if game.competitions[0].status.type.state == "pre" {
+                            if game.competitions.first?.status.type.state == "pre" {
                                 VStack {
                                     HStack {
                                         AsyncImage(
