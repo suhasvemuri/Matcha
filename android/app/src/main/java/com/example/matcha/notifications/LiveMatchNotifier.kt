@@ -58,9 +58,15 @@ class LiveMatchNotifier(private val context: Context) {
                 "Goal alerts",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply { description = "Alerts when a team scores in your live matches" }
+            val finals = NotificationChannel(
+                FINAL_CHANNEL_ID,
+                "Full-time results",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = "A summary when one of your matches finishes" }
             val sys = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             sys.createNotificationChannel(channel)
             sys.createNotificationChannel(goals)
+            sys.createNotificationChannel(finals)
         }
     }
 
@@ -85,6 +91,30 @@ class LiveMatchNotifier(private val context: Context) {
             .setContentIntent(openAppIntent())
             .build()
         manager.notify("goal-${match.id}".hashCode(), n)
+    }
+
+    /** A one-shot "full-time" alert when a tracked match finishes. */
+    fun notifyFinal(match: Match) {
+        if (!canPost()) return
+        val accent = accentArgb(match)
+        val scoreLine = "${match.home.name}  ${compactScore(match)}  ${match.away.name}"
+        val verb = when (match.sport) {
+            Sport.CRICKET -> "Result"
+            else -> "Full time"
+        }
+        val title = "$verb — ${match.leagueName}"
+        val n = NotificationCompat.Builder(context, FINAL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_matcha)
+            .setColor(accent)
+            .setContentTitle(title)
+            .setContentText(scoreLine)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(scoreLine).setBigContentTitle(title))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent())
+            .build()
+        manager.notify("final-${match.id}".hashCode(), n)
     }
 
     /** A transient anchor notification shown before the first poll resolves. */
@@ -247,6 +277,7 @@ class LiveMatchNotifier(private val context: Context) {
     companion object {
         const val CHANNEL_ID = "matcha_live_matches"
         const val GOAL_CHANNEL_ID = "matcha_goal_alerts"
+        const val FINAL_CHANNEL_ID = "matcha_final_results"
         const val GROUP_KEY = "matcha_live_group"
         const val SUMMARY_ID = 1001
     }

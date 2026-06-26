@@ -107,12 +107,18 @@ fun MainScreen(
     val selectedMatch = (state as? ScoresUiState.Success)?.groups
         ?.flatMap { it.matches }?.firstOrNull { it.id == selected }
 
-    // Auto-refresh live scores every 30s while the screen is resumed.
+    // Auto-refresh live scores while the screen is resumed, at the user's chosen
+    // cadence (Settings → Live updates). Re-keys the loop when the interval changes.
+    val refreshContext = androidx.compose.ui.platform.LocalContext.current
+    val settingsStore = remember { com.example.matcha.data.SettingsStore(refreshContext) }
+    val appSettings by settingsStore.settings.collectAsStateWithLifecycle(
+        initialValue = com.example.matcha.data.MatchaSettings(),
+    )
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(appSettings.refreshInterval) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             while (true) {
-                kotlinx.coroutines.delay(30_000)
+                kotlinx.coroutines.delay(appSettings.refreshInterval.seconds * 1000L)
                 viewModel.refreshIfLive()
             }
         }

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -14,9 +15,23 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
+/** How often the live scores screen quietly re-fetches while a match is on. */
+enum class RefreshInterval(val seconds: Int, val label: String) {
+    FAST(10, "10 seconds"),
+    NORMAL(30, "30 seconds"),
+    RELAXED(60, "1 minute"),
+    BATTERY(300, "5 minutes");
+
+    companion object {
+        val DEFAULT = NORMAL
+        fun fromSeconds(s: Int): RefreshInterval = entries.firstOrNull { it.seconds == s } ?: DEFAULT
+    }
+}
+
 data class MatchaSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
+    val refreshInterval: RefreshInterval = RefreshInterval.DEFAULT,
 )
 
 /** App-wide preferences (theme mode, Material You) persisted via DataStore. */
@@ -25,6 +40,7 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val THEME = stringPreferencesKey("theme_mode")
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
+        val REFRESH = intPreferencesKey("refresh_seconds")
         val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 
@@ -38,6 +54,7 @@ class SettingsStore(private val context: Context) {
         MatchaSettings(
             themeMode = runCatching { ThemeMode.valueOf(p[Keys.THEME] ?: "DARK") }.getOrDefault(ThemeMode.DARK),
             dynamicColor = p[Keys.DYNAMIC] ?: false,
+            refreshInterval = RefreshInterval.fromSeconds(p[Keys.REFRESH] ?: RefreshInterval.DEFAULT.seconds),
         )
     }
 
@@ -47,5 +64,9 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.DYNAMIC] = enabled }
+    }
+
+    suspend fun setRefreshInterval(interval: RefreshInterval) {
+        context.settingsDataStore.edit { it[Keys.REFRESH] = interval.seconds }
     }
 }

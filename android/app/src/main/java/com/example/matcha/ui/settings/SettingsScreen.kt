@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.matcha.data.MatchaSettings
+import com.example.matcha.data.RefreshInterval
 import com.example.matcha.data.SettingsStore
 import com.example.matcha.data.ThemeMode
 import kotlinx.coroutines.launch
@@ -97,6 +98,32 @@ fun SettingsScreen(onBack: () -> Unit) {
                             Text("Use Material You wallpaper colors", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(checked = settings.dynamicColor, onCheckedChange = { scope.launch { store.setDynamicColor(it) } })
+                    }
+                }
+            }
+
+            SectionLabel("Live updates")
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    Text(
+                        "Refresh scores every",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                    RefreshInterval.entries.forEach { interval ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .selectable(settings.refreshInterval == interval, onClick = {
+                                    scope.launch { store.setRefreshInterval(interval) }
+                                })
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = settings.refreshInterval == interval, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(interval.label, color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
             }

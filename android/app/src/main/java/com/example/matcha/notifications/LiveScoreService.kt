@@ -31,6 +31,7 @@ class LiveScoreService : Service() {
     private var loop: Job? = null
     private lateinit var notifier: LiveMatchNotifier
     private val trackedIds = mutableSetOf<String>()
+    private val notifiedFinal = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -54,6 +55,13 @@ class LiveScoreService : Service() {
             val teams = favorites.favoriteTeamNames.first()
             val all = runCatching { repo.fetchOnce(leagues, teams) }.getOrDefault(emptyList())
             val live = all.filter { it.state == MatchState.LIVE }
+
+            // A match we were tracking has just gone final — post a one-shot
+            // full-time result before it's cleared. Captured against trackedIds
+            // (and notifiedFinal) so each finish alerts exactly once.
+            all.asSequence()
+                .filter { it.state == MatchState.FINAL && it.id in trackedIds && notifiedFinal.add(it.id) }
+                .forEach { notifier.notifyFinal(it) }
 
             updateNotifications(live)
 
