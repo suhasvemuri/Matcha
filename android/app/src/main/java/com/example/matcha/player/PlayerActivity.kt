@@ -69,6 +69,8 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var root: FrameLayout
 
     private var nativePlaying = false
+    /** True for user-configured IPTV: skip embed-origin header defaults. */
+    private var forceNativeMode = false
     private var nativeHealthy = false
     private var extractionDone = false
     private var webFallbackActive = false
@@ -110,8 +112,19 @@ class PlayerActivity : ComponentActivity() {
         root.addView(spinner)
         addTopBar(intent.getStringExtra(EXTRA_TITLE) ?: "Live stream")
 
-        if (isDirectStream(url)) {
-            if (isSafeMediaUrl(url)) playNative(url, emptyMap()) else finish()
+        val forceNative = intent.getBooleanExtra(EXTRA_FORCE_NATIVE, false)
+        forceNativeMode = forceNative
+        val extraHeaders = intent.getStringArrayListExtra(EXTRA_HEADERS)
+            ?.let { flat -> flat.chunked(2).filter { it.size == 2 }.associate { it[0] to it[1] } }
+            ?: emptyMap()
+
+        if (forceNative) {
+            // A user-configured IPTV stream: trust the URL (the user added it),
+            // so allow LAN/HTTP sources a public embed wouldn't get, and play
+            // natively with the channel's headers.
+            playNative(url, extraHeaders)
+        } else if (isDirectStream(url)) {
+            if (isSafeMediaUrl(url)) playNative(url, extraHeaders) else finish()
         } else {
             embedHost = runCatching { java.net.URI(url).host }.getOrNull()
             setupEmbedExtraction(url)
@@ -130,10 +143,12 @@ class PlayerActivity : ComponentActivity() {
             .setUserAgent(DESKTOP_UA)
             .setDefaultRequestProperties(
                 buildMap {
-                    // Default to the embed origin, then let the captured request's
-                    // own headers win (correct Referer/Origin for this stream).
-                    put("Referer", "https://embed.st/")
-                    put("Origin", "https://embed.st")
+                    // Embed streams expect an embed.st origin; IPTV streams carry
+                    // their own (or none), so only seed that default for embeds.
+                    if (!forceNativeMode) {
+                        put("Referer", "https://embed.st/")
+                        put("Origin", "https://embed.st")
+                    }
                     headers.forEach { (k, v) ->
                         if (!k.equals("Accept-Encoding", true) && v.isNotBlank()) put(k, v)
                     }
@@ -534,6 +549,8 @@ class PlayerActivity : ComponentActivity() {
 
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
+        const val EXTRA_HEADERS = "extra_headers"
+        const val EXTRA_FORCE_NATIVE = "extra_force_native"
 
         private val DIRECT = Regex("""\.(m3u8|mpd|mp4|ts|m4s)(\?.*)?$""", RegexOption.IGNORE_CASE)
         fun isDirectStream(url: String): Boolean = DIRECT.containsMatchIn(url)
@@ -572,6 +589,26 @@ class PlayerActivity : ComponentActivity() {
                     .putExtra(EXTRA_TITLE, title)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
+        }
+
+        /**
+         * Start the player for a resolved [StreamOption]. IPTV streams are
+         * user-configured direct streams: force native ExoPlayer playback and
+         * forward the channel's request headers (User-Agent/Referer/…).
+         */
+        fun start(context: Context, option: com.example.matcha.data.streaming.StreamOption, title: String) {
+            val forceNative = option.source == "iptv"
+            val intent = Intent(context, PlayerActivity::class.java)
+                .putExtra(EXTRA_URL, option.url)
+                .putExtra(EXTRA_TITLE, title)
+                .putExtra(EXTRA_FORCE_NATIVE, forceNative)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (option.headers.isNotEmpty()) {
+                val flat = ArrayList<String>(option.headers.size * 2)
+                option.headers.forEach { (k, v) -> flat.add(k); flat.add(v) }
+                intent.putStringArrayListExtra(EXTRA_HEADERS, flat)
+            }
+            context.startActivity(intent)
         }
     }
 }

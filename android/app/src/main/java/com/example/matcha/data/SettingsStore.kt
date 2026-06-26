@@ -32,6 +32,9 @@ data class MatchaSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val dynamicColor: Boolean = false,
     val refreshInterval: RefreshInterval = RefreshInterval.DEFAULT,
+    /** Optional user IPTV playlist + EPG for native "where to watch" streams. */
+    val iptvM3uUrl: String = "",
+    val iptvEpgUrl: String = "",
 )
 
 /** App-wide preferences (theme mode, Material You) persisted via DataStore. */
@@ -41,6 +44,8 @@ class SettingsStore(private val context: Context) {
         val THEME = stringPreferencesKey("theme_mode")
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
         val REFRESH = intPreferencesKey("refresh_seconds")
+        val IPTV_M3U = stringPreferencesKey("iptv_m3u_url")
+        val IPTV_EPG = stringPreferencesKey("iptv_epg_url")
         val ONBOARDED = booleanPreferencesKey("onboarded")
     }
 
@@ -55,6 +60,8 @@ class SettingsStore(private val context: Context) {
             themeMode = runCatching { ThemeMode.valueOf(p[Keys.THEME] ?: "DARK") }.getOrDefault(ThemeMode.DARK),
             dynamicColor = p[Keys.DYNAMIC] ?: false,
             refreshInterval = RefreshInterval.fromSeconds(p[Keys.REFRESH] ?: RefreshInterval.DEFAULT.seconds),
+            iptvM3uUrl = p[Keys.IPTV_M3U] ?: "",
+            iptvEpgUrl = p[Keys.IPTV_EPG] ?: "",
         )
     }
 
@@ -68,5 +75,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setRefreshInterval(interval: RefreshInterval) {
         context.settingsDataStore.edit { it[Keys.REFRESH] = interval.seconds }
+    }
+
+    suspend fun setIptvM3uUrl(url: String) {
+        context.settingsDataStore.edit { it[Keys.IPTV_M3U] = url.trim() }
+    }
+
+    suspend fun setIptvEpgUrl(url: String) {
+        context.settingsDataStore.edit { it[Keys.IPTV_EPG] = url.trim() }
     }
 }

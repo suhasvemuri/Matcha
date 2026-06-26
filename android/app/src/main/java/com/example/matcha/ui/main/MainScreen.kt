@@ -826,10 +826,11 @@ private fun StreamSheet(state: StreamSheetState, onDismiss: () -> Unit) {
                     val title = "${state.match.home.name} vs ${state.match.away.name}"
                     state.options.forEach { option ->
                         StreamOptionRow(option) {
-                            // Play in the in-app player (WebView for embeds,
-                            // ExoPlayer + Cast for direct streams).
+                            // Play in the in-app player: WebView for embeds,
+                            // ExoPlayer + Cast for direct/IPTV streams (the
+                            // option carries any per-channel request headers).
                             runCatching {
-                                com.example.matcha.player.PlayerActivity.start(context, option.url, title)
+                                com.example.matcha.player.PlayerActivity.start(context, option, title)
                             }
                         }
                     }

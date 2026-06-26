@@ -12,6 +12,8 @@ data class StreamOption(
     val source: String,
     val isHd: Boolean,
     val language: String?,
+    /** Per-stream request headers (IPTV channels often need User-Agent/Referer). */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /** streamed.st match-list element from /api/matches/... (subset). */

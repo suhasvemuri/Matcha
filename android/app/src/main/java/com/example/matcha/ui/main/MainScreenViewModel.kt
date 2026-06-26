@@ -8,9 +8,12 @@ import com.example.matcha.data.LeagueMatches
 import com.example.matcha.data.Match
 import com.example.matcha.data.MatchState
 import com.example.matcha.data.MatchaRepository
+import com.example.matcha.data.SettingsStore
+import com.example.matcha.data.streaming.IptvResolver
 import com.example.matcha.data.streaming.StreamOption
 import com.example.matcha.data.streaming.StreamedResolver
 import com.example.matcha.notifications.LiveScoreService
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +29,8 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
     private val favorites = FavoritesStore(app)
     private val repository = MatchaRepository.get(app)
     private val resolver = StreamedResolver()
+    private val iptvResolver = IptvResolver()
+    private val settingsStore = SettingsStore(app)
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -104,7 +109,15 @@ class MainScreenViewModel(app: Application) : AndroidViewModel(app) {
     fun showStreams(match: Match) {
         _streamSheet.value = StreamSheetState(match, loading = true)
         viewModelScope.launch {
-            val options = runCatching { resolver.resolve(match) }.getOrDefault(emptyList())
+            val settings = runCatching { settingsStore.settings.first() }.getOrNull()
+            // Resolve IPTV (native-playable, listed first) and Streamed concurrently.
+            val iptv = async {
+                val m3u = settings?.iptvM3uUrl.orEmpty()
+                if (m3u.isBlank()) emptyList()
+                else runCatching { iptvResolver.resolve(match, m3u, settings?.iptvEpgUrl) }.getOrDefault(emptyList())
+            }
+            val streamed = async { runCatching { resolver.resolve(match) }.getOrDefault(emptyList()) }
+            val options = (iptv.await() + streamed.await()).distinctBy { it.url }
             // Ignore if the user already dismissed or opened another match.
             if (_streamSheet.value?.match?.id == match.id) {
                 _streamSheet.value = StreamSheetState(match, loading = false, options = options)

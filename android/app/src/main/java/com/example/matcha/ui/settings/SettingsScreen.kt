@@ -17,6 +17,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -26,8 +27,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -125,6 +128,33 @@ fun SettingsScreen(onBack: () -> Unit) {
                             Text(interval.label, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
+                }
+            }
+
+            SectionLabel("IPTV (where to watch)")
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Add your own IPTV playlist to play matches natively. Streams play in the in-app player and cast to your TV.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    var m3u by remember(settings.iptvM3uUrl) { mutableStateOf(settings.iptvM3uUrl) }
+                    var epg by remember(settings.iptvEpgUrl) { mutableStateOf(settings.iptvEpgUrl) }
+                    OutlinedTextField(
+                        value = m3u,
+                        onValueChange = { m3u = it; scope.launch { store.setIptvM3uUrl(it) } },
+                        label = { Text("M3U playlist URL") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = epg,
+                        onValueChange = { epg = it; scope.launch { store.setIptvEpgUrl(it) } },
+                        label = { Text("XMLTV EPG URL (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 
