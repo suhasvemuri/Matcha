@@ -55,7 +55,7 @@ struct VolleyballMenu: View {
             let sortedDates = groupedGames.keys.sorted()
 
             if sortedDates.isEmpty {
-                Text("No Games Scheduled")
+                FeedPlaceholder(noun: "games", isLoading: viewModel.isInitialLoading, loadFailed: viewModel.loadFailed)
             } else {
                 ForEach(sortedDates, id: \.self) { date in
                     if let gamesForDate = groupedGames[date] {
@@ -127,7 +127,7 @@ struct VolleyballMenu: View {
                                 } label: {
                                     HStack {
                                         AsyncImage(
-                                            url: URL(string: game.competitions[0].competitors?[1].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin")
+                                            url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-all-sports-college.png&w=64&h=64&scale=crop&cquality=40&location=origin")
                                         ) { image in
                                             image.resizable().scaledToFit()
                                         } placeholder: {

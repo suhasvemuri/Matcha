@@ -80,7 +80,7 @@ struct MenuScoresApp: App {
     @AppStorage("enableGER") private var enableGER = false
     @AppStorage("enableITA") private var enableITA = false
 
-    @AppStorage("enableFFWC") private var enableFFWC = false
+    @AppStorage("enableFFWC") private var enableFFWC = true
     @AppStorage("enableFFWWC") private var enableFFWWC = false
     @AppStorage("enableFFWCQUEFA") private var enableFFWCQUEFA = false
     @AppStorage("enableCONCACAF") private var enableCONCACAF = false

@@ -33,8 +33,10 @@ struct SoccerMenu: View {
     @AppStorage("iptvM3UURL") private var iptvM3UURL = ""
     @AppStorage("favoriteTeamsCsv") private var legacyFavoriteTeamsCsv = ""
     @AppStorage("favoriteSoccerCsv") private var favoriteSoccerCsv = ""
+    @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
     @State private var standingsTitle = ""
     @State private var standingsRows: [SoccerStandingRow] = []
+    @State private var standingsGroups: [SoccerStandingGroup] = []
 
     private var refreshInterval: TimeInterval {
         switch selectedOption {
@@ -51,17 +53,22 @@ struct SoccerMenu: View {
         }
     }
 
+    /// Favorite team names for soccer, read from the real selections store
+    /// (with legacy CSVs as fallback). These drive per-league filtering.
     private var teamFilters: [String] {
-        (favoriteSoccerCsv + "," + legacyFavoriteTeamsCsv)
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
+        FavoriteSelectionsStore.teamTerms(
+            json: favoriteSelectionsJSON,
+            sport: .soccer,
+            legacySoccerCsv: favoriteSoccerCsv,
+            legacyCricketCsv: "",
+            legacyCombinedCsv: legacyFavoriteTeamsCsv
+        )
     }
 
     private var filteredGames: [Event] {
         guard !teamFilters.isEmpty else { return viewModel.games }
 
-        return viewModel.games.filter { game in
+        let matched = viewModel.games.filter { game in
             let names = game.competitions
                 .first?
                 .competitors?
@@ -71,6 +78,12 @@ struct SoccerMenu: View {
                 names.contains { $0.contains(filter) }
             }
         }
+
+        // Apple Sports-style: narrow a league to your favorite teams when they
+        // actually play in it; if none of your favorites appear here (e.g. club
+        // favorites for a national-team tournament like the World Cup), show the
+        // league in full rather than hiding the whole competition.
+        return matched.isEmpty ? viewModel.games : matched
     }
 
     private func broadcastNames(for game: Event) -> [String] {
@@ -87,7 +100,30 @@ struct SoccerMenu: View {
 
     var body: some View {
         Menu(title) {
-            if !standingsRows.isEmpty {
+            if !standingsGroups.isEmpty {
+                Menu("Standings") {
+                    ForEach(standingsGroups) { group in
+                        Menu(group.name) {
+                            ForEach(group.rows) { row in
+                                Text("\(row.rank). \(row.teamName)  \(row.points) pts  GP \(row.played)  (\(row.record))")
+                            }
+                        }
+                    }
+
+                    if let standingsURL = LeagueLinks.standingsURL(for: league) {
+                        Divider()
+                        Button("Open Full Standings") {
+                            NSWorkspace.shared.open(standingsURL)
+                        }
+                    }
+                }
+                if let bracketURL = LeagueLinks.bracketURL(for: league) {
+                    Button("View Knockout Bracket") {
+                        NSWorkspace.shared.open(bracketURL)
+                    }
+                }
+                Divider().padding(.bottom, 2)
+            } else if !standingsRows.isEmpty {
                 Menu("Standings: \(standingsTitle)") {
                     ForEach(standingsRows) { row in
                         Text("\(row.rank). \(row.teamName)  \(row.points) pts  GP \(row.played)  (\(row.record))")
@@ -262,7 +298,7 @@ struct SoccerMenu: View {
                     } label: {
                         HStack {
                             AsyncImage(
-                                url: URL(string: game.competitions[0].competitors?[1].team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=80&w=80&scale=crop&cquality=40")
+                                url: URL(string: game.competitions.first?.competitors?[safe: 1]?.team?.logo ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-soccer.png&h=160&w=160&scale=crop&cquality=100")
                             ) { image in
                                 image.resizable().scaledToFit()
                             } placeholder: {
@@ -275,9 +311,11 @@ struct SoccerMenu: View {
                     }
                 }
             } else {
-                Text(teamFilters.isEmpty ? "Loading games..." : "No soccer games match favorites")
-                    .foregroundColor(.gray)
-                    .padding()
+                FeedPlaceholder(
+                    noun: "soccer games",
+                    isLoading: viewModel.isInitialLoading,
+                    loadFailed: viewModel.loadFailed
+                )
             }
         }
         .onAppear {
@@ -321,6 +359,14 @@ struct SoccerMenu: View {
     }
 
     private func refreshStandingsIfNeeded(force: Bool = false) async {
+        if LeagueLinks.isGroupStageLeague(league) {
+            if !force, !standingsGroups.isEmpty { return }
+            if let groups = await SoccerStandingsService.shared.groupStandings(for: league) {
+                standingsGroups = groups
+            }
+            return
+        }
+
         if !force, !standingsRows.isEmpty { return }
         if let result = await SoccerStandingsService.shared.topStandings(for: league, maxRows: 5) {
             standingsTitle = result.title

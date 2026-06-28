@@ -14,8 +14,8 @@ struct SettingsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case general = "General"
         case behavior = "Behavior"
-        case league = "Leagues"
-        case streaming = "Streaming"
+        case league = "Sports & Data"
+        case streaming = "Favorites & Streams"
 
         var id: String { rawValue }
     }
@@ -49,7 +49,7 @@ struct SettingsView: View {
                                 .bold()
 
                             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                                Text("Version (\(version))")
+                                Text("Version \(version)")
                                     .font(.footnote)
                                     .foregroundColor(.secondary)
                             }
@@ -104,7 +104,7 @@ private extension SettingsView.Tab {
         case .general: return "gearshape"
         case .behavior: return "slider.horizontal.3"
         case .league: return "sportscourt"
-        case .streaming: return "play.tv"
+        case .streaming: return "star.circle"
         }
     }
 }

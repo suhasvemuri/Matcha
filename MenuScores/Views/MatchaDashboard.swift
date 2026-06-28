@@ -605,6 +605,7 @@ struct MatchaDashboardView: View {
     @AppStorage("favoriteCricketCsv") private var favoriteCricketCsv = ""
     @AppStorage("favoriteCompetitionsCsv") private var favoriteCompetitionsCsv = ""
     @AppStorage(FavoriteSelectionsStore.storageKey) private var favoriteSelectionsJSON = ""
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("enableDemoMode") private var enableDemoMode = false
     @AppStorage("matchaAppearanceMode") private var appearanceMode = MatchaAppearanceMode.darkFrosted.rawValue
 
@@ -620,6 +621,7 @@ struct MatchaDashboardView: View {
     @State private var watchPreloadCycle = 0
     @State private var menuWindow: NSWindow?
     @State private var detailWindow: NSWindow?
+    @State private var suppressMenuAutoFitUntil: Date = .distantPast
     @AppStorage("compactMode") private var compactMode = false
     private let turfGreen = Color(red: 0.19, green: 0.56, blue: 0.33)
     private let menuMinSize = CGSize(width: 336, height: 420)
@@ -629,6 +631,35 @@ struct MatchaDashboardView: View {
 
     private var maxDisplayedMatches: Int {
         compactMode ? 30 : 20
+    }
+
+    /// Recent completed results are shown in their own collapsible section, so
+    /// they get an independent budget rather than competing with upcoming games.
+    private var maxRecentResults: Int {
+        15
+    }
+
+    private var shouldUseCompactInlineList: Bool {
+        approximateVisibleRowCount <= 3 && !showRecentResults
+    }
+
+    private var approximateVisibleRowCount: Int {
+        let primaryCount = primaryDisplayedMatches.count
+        let expandedRecentCount = visibilityFilter == .all && showRecentResults ? recentCompletedDisplayedMatches.count : 0
+        return primaryCount + expandedRecentCount
+    }
+
+    private var recommendedMenuHeight: CGFloat {
+        if shouldShowOnboarding {
+            return 620
+        }
+
+        let baseHeight: CGFloat = 176
+        let rowHeight: CGFloat = compactMode ? 106 : 122
+        let recentToggleHeight: CGFloat = (visibilityFilter == .all && !recentCompletedDisplayedMatches.isEmpty) ? 36 : 0
+        let rows = max(1, approximateVisibleRowCount)
+        let target = baseHeight + recentToggleHeight + (CGFloat(rows) * rowHeight)
+        return min(max(target, menuMinSize.height), 760)
     }
 
     private var chromeMode: MatchaAppearanceMode {
@@ -664,6 +695,18 @@ struct MatchaDashboardView: View {
 
     private var hasFavoriteFilters: Bool {
         enableDemoMode || !(soccerTerms.isEmpty && cricketTerms.isEmpty && competitionTerms.isEmpty)
+    }
+
+    private var hasStoredFavoriteSelections: Bool {
+        !FavoriteSelectionsStore.decode(from: favoriteSelectionsJSON).isEmpty
+        || !favoriteSoccerCsv.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !favoriteCricketCsv.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !favoriteCompetitionsCsv.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !legacyFavoriteTeamsCsv.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var shouldShowOnboarding: Bool {
+        !enableDemoMode && !hasCompletedOnboarding && !hasStoredFavoriteSelections
     }
 
     private var effectiveSoccerFeeds: [SoccerLeagueFeed] {
@@ -817,30 +860,26 @@ struct MatchaDashboardView: View {
         upcoming.sort { $0.sortDate < $1.sortDate }
         completedRecent.sort { $0.sortDate > $1.sortDate }
 
-        let visible: [UnifiedMatch]
+        // Budget live + upcoming and recent-completed SEPARATELY. Previously
+        // completed games were appended after upcoming and then truncated by the
+        // shared cap, so a busy slate (e.g. a World Cup matchday with many
+        // upcoming fixtures) pushed every recent result off the list.
+        let visiblePrimary: [UnifiedMatch]
+        let visibleRecent: [UnifiedMatch]
         if visibilityFilter == .live {
-            visible = Array(live.prefix(maxDisplayedMatches))
+            visiblePrimary = Array(live.prefix(maxDisplayedMatches))
+            visibleRecent = []
         } else {
-            visible = Array((live + upcoming + completedRecent).prefix(maxDisplayedMatches))
+            visiblePrimary = Array((live + upcoming).prefix(maxDisplayedMatches))
+            visibleRecent = Array(completedRecent.prefix(maxRecentResults))
         }
 
-        var primary: [UnifiedMatch] = []
-        var recentCompleted: [UnifiedMatch] = []
-        var liveCount = 0
-
-        for match in visible {
-            if match.isLive { liveCount += 1 }
-            if matchIsCompleted(match) {
-                recentCompleted.append(match)
-            } else {
-                primary.append(match)
-            }
-        }
+        let liveCount = visiblePrimary.filter { $0.isLive }.count
 
         return MatchDisplaySnapshot(
-            visible: visible,
-            primary: primary,
-            recentCompleted: recentCompleted,
+            visible: visiblePrimary + visibleRecent,
+            primary: visiblePrimary,
+            recentCompleted: visibleRecent,
             liveCount: liveCount
         )
     }
@@ -1303,6 +1342,16 @@ struct MatchaDashboardView: View {
             if !enableStreamedProvider {
                 enableStreamedProvider = true
             }
+            if !hasCompletedOnboarding && hasStoredFavoriteSelections {
+                hasCompletedOnboarding = true
+            }
+            // Ensure feeds for already-favorited competitions are fetched
+            // (covers existing installs predating the favorites->feed sync).
+            FavoriteSelectionsStore.syncFeedEnables(from: favoriteSelectionsJSON)
+        }
+        .task(id: favoriteSelectionsJSON) {
+            // Re-sync whenever favorites change (Settings edits, search adds).
+            FavoriteSelectionsStore.syncFeedEnables(from: favoriteSelectionsJSON)
         }
         .task(id: selectionRestoreSignature) {
             restorePersistedSelectionIfNeeded()
@@ -1313,163 +1362,26 @@ struct MatchaDashboardView: View {
     }
 
     private var leftPane: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 9) {
             header
-            if isSearchExpanded {
-                searchPanel
-            }
-            matchControls
-
-            Group {
-                if !hasFavoriteFilters {
-                    Text("Set favorites in Settings -> Leagues/Favorites to show your matches here.")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                } else if displayedMatches.isEmpty {
-                    Text(visibilityFilter == .live ? "No live matches for your selected teams/competitions." : "No matches found for your selected teams/competitions.")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 12)
-                } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: compactMode ? 5 : 6) {
-                            ForEach(primaryDisplayedMatches) { unified in
-                                if let item = unified.soccer {
-                                    Button {
-                                        if activeSelectedMatchID == "soccer-\(item.id)" {
-                                            selectedDetail = nil
-                                            persistedSelectedMatchID = ""
-                                        } else {
-                                            selectedDetail = .soccer(item)
-                                            persistedSelectedMatchID = "soccer-\(item.id)"
-                                        }
-                                    } label: {
-                                        SoccerMatchCard(
-                                            item: item,
-                                            isSelected: activeSelectedMatchID == "soccer-\(item.id)"
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                } else if let match = unified.cricket {
-                                    Button {
-                                        if activeSelectedMatchID == "cricket-\(match.id)" {
-                                            selectedDetail = nil
-                                            persistedSelectedMatchID = ""
-                                        } else {
-                                            selectedDetail = .cricket(match)
-                                            persistedSelectedMatchID = "cricket-\(match.id)"
-                                        }
-                                    } label: {
-                                        CricketMatchCard(
-                                            match: match,
-                                            isSelected: activeSelectedMatchID == "cricket-\(match.id)"
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-
-                            if visibilityFilter == .all && !recentCompletedDisplayedMatches.isEmpty {
-                                if showRecentResults {
-                                    HStack(spacing: 8) {
-                                        Rectangle()
-                                            .fill(Color.white.opacity(0.14))
-                                            .frame(height: 0.5)
-                                        MatchaSectionHeading(title: "Recent Results")
-                                        Rectangle()
-                                            .fill(Color.white.opacity(0.14))
-                                            .frame(height: 0.5)
-                                        Button {
-                                            withAnimation(.easeInOut(duration: 0.22)) {
-                                                showRecentResults = false
-                                            }
-                                        } label: {
-                                            Image(systemName: "chevron.up")
-                                                .font(.system(size: 9.5, weight: .semibold))
-                                        }
-                                        .buttonStyle(MatchaMiniControlButtonStyle())
-                                        .help("Hide recent results")
-                                    }
-                                    .padding(.top, 4)
-                                    .padding(.bottom, 2)
-
-                                    ForEach(recentCompletedDisplayedMatches) { unified in
-                                        if let item = unified.soccer {
-                                            Button {
-                                                if activeSelectedMatchID == "soccer-\(item.id)" {
-                                                    selectedDetail = nil
-                                                    persistedSelectedMatchID = ""
-                                                } else {
-                                                    selectedDetail = .soccer(item)
-                                                    persistedSelectedMatchID = "soccer-\(item.id)"
-                                                }
-                                            } label: {
-                                                SoccerMatchCard(
-                                                    item: item,
-                                                    isSelected: activeSelectedMatchID == "soccer-\(item.id)"
-                                                )
-                                            }
-                                            .buttonStyle(.plain)
-                                        } else if let match = unified.cricket {
-                                            Button {
-                                                if activeSelectedMatchID == "cricket-\(match.id)" {
-                                                    selectedDetail = nil
-                                                    persistedSelectedMatchID = ""
-                                                } else {
-                                                    selectedDetail = .cricket(match)
-                                                    persistedSelectedMatchID = "cricket-\(match.id)"
-                                                }
-                                            } label: {
-                                                CricketMatchCard(
-                                                    match: match,
-                                                    isSelected: activeSelectedMatchID == "cricket-\(match.id)"
-                                                )
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                } else {
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.24)) {
-                                            showRecentResults = true
-                                        }
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: "clock.arrow.circlepath")
-                                                .font(.system(size: 10.5, weight: .semibold))
-                                            Text("Recent results (\(recentCompletedDisplayedMatches.count))")
-                                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                                                .lineLimit(1)
-                                            Spacer(minLength: 4)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 9.5, weight: .semibold))
-                                        }
-                                        .foregroundColor(.white.opacity(0.66))
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .fill(Color.white.opacity(0.03))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                                .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.top, 4)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.trailing, 2)
-                        .padding(.bottom, 6)
-                    }
+            if shouldShowOnboarding {
+                MatchaOnboardingView(openPreferencesAction: openPreferencesAction)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.top, 2)
+            } else {
+                VStack(alignment: .leading, spacing: 5) {
+                    if isSearchExpanded {
+                        searchPanel
+                    }
+
+                    matchControls
+
+                    mainContentSection
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                Spacer(minLength: 4)
             }
-            .frame(maxHeight: .infinity)
 
             if enableDemoMode {
                 demoShowcaseStrip
@@ -1505,22 +1417,77 @@ struct MatchaDashboardView: View {
             .font(.system(size: 12, weight: .semibold))
             .controlSize(.small)
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .matchaAccessorySurface(corner: 12)
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .matchaGlassContainer()
         .matchaChromePanel()
-        .overlay(alignment: .bottomTrailing) {
-            WindowResizeHandle(window: menuWindow, minSize: menuMinSize, maxSize: menuMaxSize)
-                .padding(.trailing, 2)
-                .padding(.bottom, 2)
+        .overlay(alignment: .bottom) {
+            WindowResizeHandle(window: menuWindow, minSize: menuMinSize, maxSize: menuMaxSize, mode: .verticalOnly)
+                .padding(.bottom, 3)
         }
-        .onChange(of: visibilityFilter) { newValue in
-            if newValue == .live {
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willStartLiveResizeNotification, object: menuWindow)) { _ in
+            suppressMenuAutoFitUntil = Date().addingTimeInterval(8)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndLiveResizeNotification, object: menuWindow)) { _ in
+            suppressMenuAutoFitUntil = Date().addingTimeInterval(4)
+        }
+        .task(id: menuAutoFitSignature) {
+            fitMenuWindowIfNeeded()
+        }
+        .onChange(of: visibilityFilter) {
+            if visibilityFilter == .live {
                 showRecentResults = false
             }
+        }
+    }
+
+    @ViewBuilder
+    private var mainContentSection: some View {
+        if !hasFavoriteFilters {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Add favorites to make Matcha useful.")
+                    .font(.headline)
+
+                Text("Choose teams or competitions in Settings → Favorites & Streams, or run the quick setup again.")
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button("Run Quick Setup") {
+                        hasCompletedOnboarding = false
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Open Settings") {
+                        openPreferencesAction()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        } else if displayedMatches.isEmpty {
+            Text(visibilityFilter == .live ? "No live matches for your selected teams/competitions." : "No matches found for your selected teams/competitions.")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+        } else {
+            Group {
+                if shouldUseCompactInlineList {
+                    compactMatchListContent
+                } else {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        scrollingMatchListContent
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.top, 0)
+            .padding(.trailing, 2)
+            .padding(.bottom, 4)
         }
     }
 
@@ -1557,6 +1524,124 @@ struct MatchaDashboardView: View {
                     )
                 }
             }
+        }
+    }
+
+    private var compactMatchListContent: some View {
+        VStack(alignment: .leading, spacing: compactMode ? 5 : 6) {
+            matchListRows
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var scrollingMatchListContent: some View {
+        LazyVStack(alignment: .leading, spacing: compactMode ? 5 : 6) {
+            matchListRows
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var matchListRows: some View {
+        ForEach(primaryDisplayedMatches) { unified in
+            matchCardButton(for: unified)
+        }
+
+        if visibilityFilter == .all && !recentCompletedDisplayedMatches.isEmpty {
+            if showRecentResults {
+                HStack(spacing: 8) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(height: 0.5)
+                    MatchaSectionHeading(title: "Recent Results")
+                    Rectangle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(height: 0.5)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            showRecentResults = false
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 9.5, weight: .semibold))
+                    }
+                    .buttonStyle(MatchaMiniControlButtonStyle())
+                    .help("Hide recent results")
+                }
+                .padding(.top, 4)
+                .padding(.bottom, 2)
+
+                ForEach(recentCompletedDisplayedMatches) { unified in
+                    matchCardButton(for: unified)
+                }
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        showRecentResults = true
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 10.5, weight: .semibold))
+                        Text("Recent results (\(recentCompletedDisplayedMatches.count))")
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9.5, weight: .semibold))
+                    }
+                    .foregroundColor(.white.opacity(0.66))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(0.03))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func matchCardButton(for unified: UnifiedMatch) -> some View {
+        if let item = unified.soccer {
+            Button {
+                if activeSelectedMatchID == "soccer-\(item.id)" {
+                    selectedDetail = nil
+                    persistedSelectedMatchID = ""
+                } else {
+                    selectedDetail = .soccer(item)
+                    persistedSelectedMatchID = "soccer-\(item.id)"
+                }
+            } label: {
+                SoccerMatchCard(
+                    item: item,
+                    isSelected: activeSelectedMatchID == "soccer-\(item.id)"
+                )
+            }
+            .buttonStyle(.plain)
+        } else if let match = unified.cricket {
+            Button {
+                if activeSelectedMatchID == "cricket-\(match.id)" {
+                    selectedDetail = nil
+                    persistedSelectedMatchID = ""
+                } else {
+                    selectedDetail = .cricket(match)
+                    persistedSelectedMatchID = "cricket-\(match.id)"
+                }
+            } label: {
+                CricketMatchCard(
+                    match: match,
+                    isSelected: activeSelectedMatchID == "cricket-\(match.id)"
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -1607,7 +1692,7 @@ struct MatchaDashboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .matchaChromePanel()
         .overlay(alignment: .bottomTrailing) {
-            WindowResizeHandle(window: detailWindow, minSize: detailMinSize, maxSize: detailMaxSize)
+            WindowResizeHandle(window: detailWindow, minSize: detailMinSize, maxSize: detailMaxSize, mode: .freeform)
                 .padding(.trailing, 2)
                 .padding(.bottom, 2)
         }
@@ -1615,26 +1700,29 @@ struct MatchaDashboardView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "sportscourt.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
-                .padding(6)
+            Image("TahoeIcon")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .padding(3)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [turfGreen.opacity(0.20), Color.white.opacity(0.04)],
+                                colors: [turfGreen.opacity(0.16), Color.white.opacity(0.03)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                 )
-                .matchaAccessorySurface(corner: 8)
+                .matchaAccessorySurface(corner: 11)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Matcha")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
+                    .lineLimit(1)
             }
 
             Spacer()
@@ -1716,37 +1804,34 @@ struct MatchaDashboardView: View {
     }
 
     private var matchControls: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 8) {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(visibilityFilter == .live ? "Live now" : "\(visibleMatchCount) matches")
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
+                    .lineLimit(1)
                 if visibilityFilter == .all, !showRecentResults, !recentCompletedDisplayedMatches.isEmpty {
-                    Text("\(recentCompletedDisplayedMatches.count) recent")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.70))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.08)))
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
-                        )
+                    Text("\(recentCompletedDisplayedMatches.count) recent available")
+                        .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                        .foregroundColor(MatchaChromeStyle.tertiaryForeground(for: chromeMode))
+                        .lineLimit(1)
                 }
-                Spacer(minLength: 6)
-                Picker("", selection: $visibilityFilter) {
-                    ForEach(MatchVisibilityFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 104)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .matchaAccessorySurface(corner: 10)
+
+            Spacer(minLength: 6)
+
+            Picker("", selection: $visibilityFilter) {
+                ForEach(MatchVisibilityFilter.allCases) { filter in
+                    Text(filter.title).tag(filter)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 104)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .matchaAccessorySurface(corner: 10)
     }
 
     private func containsWomenKeyword(_ value: String) -> Bool {
@@ -1789,6 +1874,41 @@ struct MatchaDashboardView: View {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private var menuAutoFitSignature: String {
+        [
+            String(shouldShowOnboarding),
+            String(isSearchExpanded),
+            String(visibilityFilter.rawValue),
+            String(showRecentResults),
+            String(primaryDisplayedMatches.count),
+            String(recentCompletedDisplayedMatches.count),
+            String(displayedMatches.count),
+            String(compactMode),
+        ]
+        .joined(separator: "|")
+    }
+
+    private func fitMenuWindowIfNeeded() {
+        guard let window = menuWindow else { return }
+        guard Date() >= suppressMenuAutoFitUntil else { return }
+
+        let currentFrame = window.frame
+        let currentHeight = currentFrame.height
+        let targetHeight = recommendedMenuHeight
+
+        guard currentHeight - targetHeight > 18 else { return }
+
+        var newFrame = currentFrame
+        newFrame.origin.y += currentHeight - targetHeight
+        newFrame.size.height = targetHeight
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(newFrame, display: true)
+        }
     }
 
     private func searchHaystack(for unified: UnifiedMatch) -> String {
@@ -2441,14 +2561,14 @@ private struct SoccerMatchCard: View {
             }
             HStack(spacing: 6) {
                 if alignment == .leading {
-                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
                 }
                 Text(team?.abbreviation ?? team?.displayName ?? "Team")
                     .font(.system(size: 11.8, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.88))
                     .lineLimit(1)
                 if alignment == .trailing {
-                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+                    TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
                 }
             }
         }
@@ -2571,7 +2691,7 @@ private struct SoccerTeamLine: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
             Text(team?.abbreviation ?? team?.displayName ?? "Team")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
@@ -2583,11 +2703,31 @@ private struct SoccerTeamLine: View {
 private struct TeamLogo: View {
     let urlString: String?
     let fallback: String
+    var teamName: String? = nil
     @State private var resolvedURL: URL?
+
+    /// National teams get a crisp flag (matching the cricket badge style);
+    /// clubs fall through to their crest logo.
+    private var flagURL: URL? { CountryFlags.flagURL(for: teamName) }
 
     var body: some View {
         Group {
-            if let resolvedURL, resolvedURL.isFileURL, let localImage = MatchaImageCache.image(for: resolvedURL) {
+            if let flagURL {
+                AsyncImage(url: flagURL) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFit()
+                    default:
+                        fallbackBadge
+                    }
+                }
+                .frame(width: 19, height: 19)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(.white.opacity(0.30), lineWidth: 0.6)
+                )
+            } else if let resolvedURL, resolvedURL.isFileURL, let localImage = MatchaImageCache.image(for: resolvedURL) {
                 Image(nsImage: localImage)
                     .resizable()
                     .scaledToFit()
@@ -2727,14 +2867,14 @@ private struct MatchaMiniControlButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 11, weight: .semibold, design: .rounded))
             .foregroundColor(prominent ? .white : MatchaChromeStyle.primaryForeground(for: mode))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5.5)
             .background(backgroundView(for: mode, pressed: configuration.isPressed))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(borderColor(for: mode), lineWidth: 0.6)
             )
-            .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.988 : 1.0)
     }
 
     @ViewBuilder
@@ -2801,8 +2941,8 @@ private struct MatchaProviderBadge: View {
         Text(title)
             .font(.system(size: 9, weight: .semibold, design: .rounded))
             .foregroundColor(MatchaChromeStyle.primaryForeground(for: mode).opacity(0.86))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 5.5)
+            .padding(.vertical, 2.5)
             .background(Capsule().fill(tint.opacity(0.16)))
             .overlay(
                 Capsule()
@@ -2825,24 +2965,50 @@ private struct MatchaSectionHeading: View {
 }
 
 private struct WindowResizeHandle: View {
+    enum Mode {
+        case freeform
+        case verticalOnly
+    }
+
     weak var window: NSWindow?
     let minSize: CGSize
     let maxSize: CGSize
+    let mode: Mode
 
     @State private var initialFrame: CGRect?
 
     var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 9.5, weight: .semibold))
-            .foregroundColor(.white.opacity(0.58))
-            .frame(width: 22, height: 22)
-            .background(Circle().fill(Color.black.opacity(0.16)))
-            .overlay(
-                Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
-            )
+        Group {
+            if mode == .verticalOnly {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.up")
+                    Image(systemName: "chevron.down")
+                }
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundColor(.white.opacity(0.56))
+                .frame(width: 44, height: 18)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.black.opacity(0.15))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.55)
+                )
+            } else {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.58))
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(Color.black.opacity(0.16)))
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.6)
+                    )
+            }
+        }
             .contentShape(Rectangle())
-            .help("Resize")
+            .help(mode == .verticalOnly ? "Resize Height" : "Resize")
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -2852,8 +3018,15 @@ private struct WindowResizeHandle: View {
                             initialFrame = startFrame
                         }
 
-                        let proposedWidth = min(max(startFrame.width + value.translation.width, minSize.width), maxSize.width)
-                        let proposedHeight = min(max(startFrame.height - value.translation.height, minSize.height), maxSize.height)
+                        let proposedWidth: CGFloat
+                        switch mode {
+                        case .freeform:
+                            proposedWidth = min(max(startFrame.width + value.translation.width, minSize.width), maxSize.width)
+                        case .verticalOnly:
+                            proposedWidth = startFrame.width
+                        }
+
+                        let proposedHeight = min(max(startFrame.height + value.translation.height, minSize.height), maxSize.height)
                         let newOrigin = CGPoint(
                             x: startFrame.origin.x,
                             y: startFrame.maxY - proposedHeight
@@ -3447,7 +3620,7 @@ private struct SoccerInlineDetailPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(item.leagueTitle)
                     .font(.subheadline.weight(.semibold))
@@ -3465,12 +3638,12 @@ private struct SoccerInlineDetailPane: View {
             }
 
             Text(displayText(for: game, league: item.leagueCode))
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(MatchaChromeStyle.primaryForeground(for: chromeMode))
                 .lineLimit(2)
 
             Text(game.status.type.detail ?? game.status.type.shortDetail ?? "")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(MatchaChromeStyle.secondaryForeground(for: chromeMode))
                 .lineLimit(2)
 
@@ -3496,7 +3669,7 @@ private struct SoccerInlineDetailPane: View {
             .font(.caption)
             .controlSize(.small)
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .matchaAccessorySurface(corner: 12)
 
             Picker("Section", selection: $selectedTab) {
@@ -3507,7 +3680,7 @@ private struct SoccerInlineDetailPane: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
-            .padding(4)
+            .padding(3)
             .matchaAccessorySurface(corner: 12)
 
             ScrollView(.vertical, showsIndicators: false) {
@@ -3522,9 +3695,9 @@ private struct SoccerInlineDetailPane: View {
                     }
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, 1)
         }
-        .padding(13)
+        .padding(12)
         .matchaGlassContainer()
         .task {
             if enableDataFetch {
@@ -3600,14 +3773,14 @@ private struct SoccerInlineDetailPane: View {
                             }
                         }
                         Spacer()
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             Button {
                                 inlineStreamURL = smartWatch.streamURL
                                 inlineStreamHeaders = smartWatch.requestHeaders
                                 inlinePreviewPreferWeb = smartWatch.matchedBy == "streamed"
                             } label: {
                                 Image(systemName: "play.fill")
-                                    .frame(width: 24, height: 20)
+                                    .frame(width: 22, height: 18)
                             }
                             .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
                             .help("Preview")
@@ -3615,7 +3788,7 @@ private struct SoccerInlineDetailPane: View {
                                 NSWorkspace.shared.open(smartWatch.streamURL)
                             } label: {
                                 Image(systemName: "arrow.up.right")
-                                    .frame(width: 24, height: 20)
+                                    .frame(width: 22, height: 18)
                             }
                             .buttonStyle(MatchaMiniControlButtonStyle())
                             .help("Open")
@@ -3623,7 +3796,7 @@ private struct SoccerInlineDetailPane: View {
                                 openDetachedStream(smartWatch, pinnedToCorner: false)
                             } label: {
                                 Image(systemName: "pip")
-                                    .frame(width: 24, height: 20)
+                                    .frame(width: 22, height: 18)
                             }
                             .buttonStyle(MatchaMiniControlButtonStyle())
                             .help("PiP")
@@ -3631,7 +3804,7 @@ private struct SoccerInlineDetailPane: View {
                                 openDetachedStream(smartWatch, pinnedToCorner: true)
                             } label: {
                                 Image(systemName: "pin.fill")
-                                    .frame(width: 24, height: 20)
+                                    .frame(width: 22, height: 18)
                             }
                             .buttonStyle(MatchaMiniControlButtonStyle())
                             .help("Pin to corner")
@@ -4012,7 +4185,7 @@ private struct SoccerInlineDetailPane: View {
     @ViewBuilder
     private func soccerTeamRow(team: Team?, score: String?) -> some View {
         HStack(spacing: 8) {
-            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?")
+            TeamLogo(urlString: team?.logo, fallback: team?.abbreviation ?? "?", teamName: team?.displayName)
             Text(team?.displayName ?? team?.name ?? "Team")
                 .font(.caption)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -4196,7 +4369,7 @@ private struct CricketInlineDetailPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text(match.seriesName.isEmpty ? "Cricket" : match.seriesName)
                     .font(.system(size: 15, weight: .semibold))
@@ -4261,7 +4434,7 @@ private struct CricketInlineDetailPane: View {
             .font(.caption2)
             .controlSize(.small)
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .matchaAccessorySurface(corner: 12)
 
             Picker("Section", selection: $selectedTab) {
@@ -4272,7 +4445,7 @@ private struct CricketInlineDetailPane: View {
             .pickerStyle(.segmented)
             .controlSize(.small)
             .labelsHidden()
-            .padding(4)
+            .padding(3)
             .matchaAccessorySurface(corner: 12)
 
             ScrollView(.vertical, showsIndicators: false) {
@@ -4287,9 +4460,9 @@ private struct CricketInlineDetailPane: View {
                     }
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, 1)
         }
-        .padding(13)
+        .padding(12)
         .matchaGlassContainer()
         .task(id: match.id) {
             if enableDataFetch {
@@ -4416,14 +4589,14 @@ private struct CricketInlineDetailPane: View {
                         }
                     }
                     Spacer()
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Button {
                             inlineStreamURL = smartWatch.streamURL
                             inlineStreamHeaders = smartWatch.requestHeaders
                             inlinePreviewPreferWeb = smartWatch.matchedBy == "streamed"
                         } label: {
                             Image(systemName: "play.fill")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 22, height: 18)
                         }
                         .buttonStyle(MatchaMiniControlButtonStyle(prominent: true))
                         .help("Preview")
@@ -4431,7 +4604,7 @@ private struct CricketInlineDetailPane: View {
                             NSWorkspace.shared.open(smartWatch.streamURL)
                         } label: {
                             Image(systemName: "arrow.up.right")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 22, height: 18)
                         }
                         .buttonStyle(MatchaMiniControlButtonStyle())
                         .help("Open")
@@ -4439,7 +4612,7 @@ private struct CricketInlineDetailPane: View {
                             openDetachedStream(smartWatch, pinnedToCorner: false)
                         } label: {
                             Image(systemName: "pip")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 22, height: 18)
                         }
                         .buttonStyle(MatchaMiniControlButtonStyle())
                         .help("PiP")
@@ -4447,7 +4620,7 @@ private struct CricketInlineDetailPane: View {
                             openDetachedStream(smartWatch, pinnedToCorner: true)
                         } label: {
                             Image(systemName: "pin.fill")
-                                .frame(width: 24, height: 20)
+                                .frame(width: 22, height: 18)
                         }
                         .buttonStyle(MatchaMiniControlButtonStyle())
                         .help("Pin to corner")
@@ -6006,3 +6179,4 @@ private extension Color {
         self.init(red: red, green: green, blue: blue)
     }
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     

@@ -11,6 +11,7 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @AppStorage("showInDock") private var showInDock = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @EnvironmentObject private var updaterController: MatchaUpdaterController
 
     func updateActivationPolicy() {
@@ -25,6 +26,10 @@ struct GeneralSettingsView: View {
             Text("General")
                 .font(.title2)
                 .bold()
+
+            Text("App behavior, updates, and quick setup.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Form {
                 Section {
@@ -92,6 +97,20 @@ struct GeneralSettingsView: View {
                     }
                 } header: {
                     Text("Updates")
+                }
+
+                Section {
+                    Button {
+                        hasCompletedOnboarding = false
+                    } label: {
+                        Label("Run quick setup again", systemImage: "wand.and.stars")
+                    }
+
+                    Text("The next time you open Matcha, the welcome setup will walk through favorites and stream sources again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Onboarding")
                 }
             }
             .formStyle(.grouped)

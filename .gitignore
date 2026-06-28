@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Xcode build output
+build/
+release-build/
+release-artifacts/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+.claude/

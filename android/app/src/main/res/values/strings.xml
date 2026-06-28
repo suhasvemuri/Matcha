@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Matcha</string>
+    <string name="widget_description">Live scores for your favorite teams and competitions</string>
+    <string name="shortcut_search">Search teams</string>
+    <string name="shortcut_favorites">Favorites</string>
+</resources>

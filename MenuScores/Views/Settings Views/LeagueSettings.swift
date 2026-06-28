@@ -50,7 +50,7 @@ struct LeagueSettingsView: View {
     @AppStorage("enableGER") private var enableGER = false
     @AppStorage("enableITA") private var enableITA = false
 
-    @AppStorage("enableFFWC") private var enableFFWC = false
+    @AppStorage("enableFFWC") private var enableFFWC = true
     @AppStorage("enableFFWWC") private var enableFFWWC = false
     @AppStorage("enableFFWCQUEFA") private var enableFFWCQUEFA = false
     @AppStorage("enableCONCACAF") private var enableCONCACAF = false
@@ -80,9 +80,13 @@ struct LeagueSettingsView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("Leagues")
+            Text("Sports & Data")
                 .font(.title2)
                 .bold()
+
+            Text("Keep Matcha focused on the competitions you actually want refreshed in the background.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Form {
                 Section("Core Sports") {

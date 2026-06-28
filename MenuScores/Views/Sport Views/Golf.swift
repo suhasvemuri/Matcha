@@ -55,7 +55,7 @@ struct GolfMenu: View {
             let sortedDates = groupedGames.keys.sorted()
 
             if sortedDates.isEmpty {
-                Text("No Games Scheduled")
+                FeedPlaceholder(noun: "games", isLoading: viewModel.isInitialLoading, loadFailed: viewModel.loadFailed)
             } else {
                 ForEach(sortedDates, id: \.self) { date in
                     if let gamesForDate = groupedGames[date] {

@@ -93,7 +93,7 @@ struct TennisMenu: View {
                                                     Menu {} label: {
                                                         HStack {
                                                             AsyncImage(
-                                                                url: URL(string: competition.competitors?.first?.athlete?.flag?.href ?? competition.competitors?.first?.roster?.athletes?.first?.flag?.href ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-tennis.png&h=80&w=80&scale=crop&cquality=40")
+                                                                url: URL(string: competition.competitors?.first?.athlete?.flag?.href ?? competition.competitors?.first?.roster?.athletes?.first?.flag?.href ?? "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-tennis.png&h=160&w=160&scale=crop&cquality=100")
                                                             ) { image in
                                                                 image.resizable().scaledToFit()
                                                             } placeholder: {
@@ -114,7 +114,7 @@ struct TennisMenu: View {
                     } label: {
                         HStack {
                             AsyncImage(
-                                url: URL(string: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-tennis.png&h=80&w=80&scale=crop&cquality=40")
+                                url: URL(string: "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-tennis.png&h=160&w=160&scale=crop&cquality=100")
                             ) { image in
                                 image.resizable().scaledToFit()
                             } placeholder: {

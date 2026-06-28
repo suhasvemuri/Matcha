@@ -119,9 +119,9 @@ struct RacingMenu: View {
 
                         Divider()
 
-                        if game.competitions[0].status.type.state == "in" || game.competitions[0].status.type.state == "post" {
+                        if game.competitions.first?.status.type.state == "in" || game.competitions.first?.status.type.state == "post" {
                             Menu {
-                                let competitors = game.competitions[0].competitors ?? []
+                                let competitors = game.competitions.first?.competitors ?? []
 
                                 ForEach(competitors.filter { $0.order != nil }, id: \.id) { competitor in
                                     Button {} label: {
@@ -148,7 +148,7 @@ struct RacingMenu: View {
                             AsyncImage(
                                 url: URL(
                                     string:
-                                    "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-nascar.png&h=80&w=80&scale=crop&cquality=40"
+                                    "https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-nascar.png&h=160&w=160&scale=crop&cquality=100"
                                 )
                             ) { image in
                                 image.resizable().scaledToFit()
@@ -162,9 +162,7 @@ struct RacingMenu: View {
                     }
                 }
             } else {
-                Text("Loading games...")
-                    .foregroundColor(.gray)
-                    .padding()
+                FeedPlaceholder(noun: "races", isLoading: viewModel.isInitialLoading, loadFailed: viewModel.loadFailed)
             }
         }
         .onAppear {

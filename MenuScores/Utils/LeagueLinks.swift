@@ -17,6 +17,32 @@ enum LeagueLinks {
         case "FRA": return "fra.1"
         case "NED": return "ned.1"
         case "POR": return "por.1"
+        // World Cup family — group standings come from these ESPN slugs.
+        case "FFWC": return "fifa.world"
+        case "FFWWC": return "fifa.wwc"
+        case "FFWCQUEFA": return "fifa.worldq.uefa"
+        case "CONMEBOL": return "fifa.worldq.conmebol"
+        case "CONCACAF": return "fifa.worldq.concacaf"
+        case "CAF": return "fifa.worldq.caf"
+        case "AFC": return "fifa.worldq.afc"
+        case "OFC": return "fifa.worldq.ofc"
+        default: return nil
+        }
+    }
+
+    /// World Cup family leagues have multiple group tables (and a knockout
+    /// bracket) rather than a single standings table.
+    static func isGroupStageLeague(_ league: String) -> Bool {
+        ["FFWC", "FFWWC", "FFWCQUEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"]
+            .contains(league.uppercased())
+    }
+
+    /// ESPN bracket page for the knockout-stage tournaments (qualifiers don't
+    /// have a bracket).
+    static func bracketURL(for league: String) -> URL? {
+        switch league.uppercased() {
+        case "FFWC": return URL(string: "https://www.espn.com/soccer/bracket/_/league/fifa.world")
+        case "FFWWC": return URL(string: "https://www.espn.com/soccer/bracket/_/league/fifa.wwc")
         default: return nil
         }
     }

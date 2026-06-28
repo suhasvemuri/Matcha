@@ -9,6 +9,12 @@ struct SoccerStandingRow: Identifiable {
     let record: String
 }
 
+struct SoccerStandingGroup: Identifiable {
+    let id: String
+    let name: String
+    let rows: [SoccerStandingRow]
+}
+
 actor SoccerStandingsService {
     static let shared = SoccerStandingsService()
 
@@ -19,6 +25,7 @@ actor SoccerStandingsService {
     }
 
     private var cache: [String: CacheItem] = [:]
+    private var groupCache: [String: (groups: [SoccerStandingGroup], loadedAt: Date)] = [:]
 
     func topStandings(for league: String, maxRows: Int = 5) async -> (title: String, rows: [SoccerStandingRow])? {
         if let cached = cache[league], Date().timeIntervalSince(cached.loadedAt) < 900 {
@@ -28,8 +35,10 @@ actor SoccerStandingsService {
         guard let url = LeagueLinks.standingsAPIURL(for: league) else { return nil }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw NetworkError.invalidResponse
             }
 
@@ -63,8 +72,57 @@ actor SoccerStandingsService {
 
             return (item.title, Array(item.rows.prefix(maxRows)))
         } catch {
-            print("Failed to fetch standings:", error)
+            Log.feed.error("Failed to fetch standings: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// All group tables for a competition (e.g. the World Cup's Groups A–L).
+    /// Single-table leagues come back as one group.
+    func groupStandings(for league: String) async -> [SoccerStandingGroup]? {
+        if let cached = groupCache[league], Date().timeIntervalSince(cached.loadedAt) < 900 {
+            return cached.groups
+        }
+
+        guard let url = LeagueLinks.standingsAPIURL(for: league) else { return nil }
+
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw NetworkError.invalidResponse
+            }
+
+            let decoded = try JSONDecoder().decode(SoccerStandingsResponse.self, from: data)
+            guard let children = decoded.children, !children.isEmpty else { return nil }
+
+            let groups = children.enumerated().map { index, child in
+                SoccerStandingGroup(
+                    id: "\(index)",
+                    name: child.name ?? "Group \(index + 1)",
+                    rows: Self.rows(from: child)
+                )
+            }
+
+            groupCache[league] = (groups, Date())
+            return groups
+        } catch {
+            Log.feed.error("Failed to fetch group standings: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private static func rows(from child: SoccerStandingsChild) -> [SoccerStandingRow] {
+        child.standings.entries.map { entry in
+            SoccerStandingRow(
+                id: entry.team.id,
+                rank: entry.value(for: "rank"),
+                teamName: entry.team.shortDisplayName ?? entry.team.displayName,
+                points: entry.value(for: "points"),
+                played: entry.value(for: "gamesPlayed"),
+                record: "\(entry.value(for: "wins"))-\(entry.value(for: "ties"))-\(entry.value(for: "losses"))"
+            )
         }
     }
 }

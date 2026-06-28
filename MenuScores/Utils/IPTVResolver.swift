@@ -176,7 +176,7 @@ actor IPTVResolver {
             cachedSourceURL = sourceURL.absoluteString
             lastLoadedAt = Date()
         } catch {
-            print("Failed to fetch IPTV playlist:", error)
+            Log.feed.error("Failed to fetch IPTV playlist: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -464,7 +464,7 @@ actor IPTVResolver {
             cachedEPGURL = url.absoluteString
             lastEPGLoadedAt = Date()
         } catch {
-            print("Failed to fetch IPTV EPG:", error)
+            Log.feed.error("Failed to fetch IPTV EPG: \(error.localizedDescription, privacy: .public)")
         }
     }
 
